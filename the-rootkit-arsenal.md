@@ -148,3 +148,5 @@ IA-32 프로세서에서 제공하는 페이징 기능 역시 메모리 보호 �
 
 ## System Briefing
 Windows와 Intel 사이의 매핑은 일대일 대응이 아님. Windows는 HAL을 통해 칩셋 의존성을 격리(Windows NT는 처음에 MIPS와 Intel 하드웨어 플랫폼 둘 다에서 구동되도록 구현됨)
+
+### Windows상의 물리 메모리

@@ -653,3 +653,99 @@ __declspec(dllexport) void HookStop()
 }
 #endif
 ```
+
+<br/><br/>
+
+## DLL 인젝션
+다른 프로세스에게 LoadLibrary() API 함수를 스스로 호출하도록 명령하여, 사용자가 원하는 DLL을 로드하는 것(LoadLibrary() API 함수로 DLL 로딩 시 해당 DLL의 DllMain() 함수가 자동으로 호출됨). 해당 프로세스 메모리에 대해 정당한 접근 권한을 가지게 됨
+
+<br/>
+
+### 원격 스레드 생성(CreateRemoteThread() API 함수) 방식
+
+#### <ins>예시 #5: Myhack.cpp</ins>
+
+```cpp
+#include “windows.h“
+// TCHAR형의 사용을 위해 삽입. _UNICODE 정의 시 wchar_t 타입으로,
+// _MBCS 정의 시 char 타입으로 자동 형 변환
+#include “tchar.h“
+#pragma comment(lib, “urlmon.lib“) // 명시적인 라이브러리 링크
+#define DEF_URL (L“http://www.naver.com/index.html“)
+#define DEF_FILE_NAME (L“index.html“)
+HMODULE g_hMod = NULL;
+DWORD WINAPI ThreadProc(LPVOID lParam)
+{
+    TCHAR szPath[_MAX_PATH] = {0, };
+    if(!GetModuleFileName(g_hMod, szPath, MAX_PATH))
+        return FALSE;
+    TCHAR* p = _tcsrchr(szPath, ’\\’); // strrchr에 대응하는 TCHAR용 함수
+    if(!p)
+        return FALSE;
+    _tcscpy_s(p + 1, _MAX_PATH, DEF_FILE_NAME); // strcpy_s의 TCHAR용 함수
+    // 인터넷에서 비트 데이터들을 내려 받아 파일로 저장
+    URLDownloadToFile(NULL, DEF_URL, szPath, 0, NULL);
+    return 0;
+}
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    HANDLE hThread = NULL;
+    g_hMod = (HMODULE)hinstDLL;
+    switch(fdwReason)
+    {
+    case DLL_PROCESS_ATTACH :
+        OutputDebugString(L“myhack.dll Injection!!!“);
+        hThread = CreateThread(NULL, 0, ThreadProc, NULL, 0, NULL);
+        // 스레드 참조 카운트를 미리 하나 감소시키고, 이후 함수 반환 시 나머지 감소
+        CloseHandle(hThread);
+        break;
+    }
+    return TRUE;
+}
+```
+
+#### <ins>예시 #6: InjectDLL.cpp</ins>
+
+```cpp
+#include “windows.h“
+#include “tchar.h“
+BOOL InjectDll(DWORD dwPID, LPCTSTR szDllPath)
+{
+    HANDLE hProcess = NULL;
+    hThread = NULL;
+    HMODULE hMod = NULL;
+    LPVOID pRemoteBuf = NULL;
+    DWORD dwBufSize = (DWORD)(_tcslen(szDllPath) + 1) * sizeof(TCHAR);
+    LPTHREAD_START_ROUTINE pThreadProc;
+    if(!(hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPID)))
+    {
+        _tprintf(L“OpenProcess(%d) failed!!! [%d]\n“, dwPID, GetLastError());
+        return FALSE;
+    }
+    pRemoteBuf = VirtualAllocEx // 해당 프로세스 가상 메모리 공간에 할당
+        (hProcess, NULL, dwBufSize, MEM_COMMIT, PAGE_READWRITE);
+    WriteProcessMemory // 해당 프로세스 메모리 영역에 데이터를 씀
+        (hProcess, pRemoteBuf, (LPVOID)szDllPath, dwBufSize, NULL);
+    hMod = GetModuleHandle(L“kernel32.dll“);
+    pThreadProc = (LPTHREAD_START_ROUTINE)GetProcAddress(hMod, “LoadLibraryW“);
+    hThread = CreateRemoteThread // 다른 프로세스 내 스레드 생성
+        (hProcess, NULL, 0, pThreadProc, pRemoteBuf, 0, NULL);
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+    CloseHandle(hProcess);
+    return TRUE;
+}
+int _tmain(int argc, TCHAR* argv[]) // main 함수의 TCHAR형
+{
+    if(argc != 3)
+    {
+        _tprintf(L“USAGE : %s pid dll_path\n“, argv[0]);
+        return 1;
+    }
+    if(InjectDll((DWORD)_tstol(argv[1]), argv[2]))
+        _tprintf(L“InejctDll(\“%s\“) success!!!\n“, argv[2]);
+    else
+        _tprintf(L“InjectDll(\“%s\“) failed!!!\n“, argv[2]);
+    return 0;
+}
+```

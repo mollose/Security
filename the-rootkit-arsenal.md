@@ -246,7 +246,6 @@ system service number는 32비트 값으로, 처음 12비트는 어떤 시스템
 * argumentTable : 바이트들로 이루어진 배열의 첫 요소의 포인터를 담고 있는데 배열 내의 각 바이트는 연관된 SSDT 루틴 호출 시 함수 인자를 위해 할당하는 공간의 바이트 크기를 나타냄. 이러한 배열은 시스템 서비스 파라미터 테이블(SSPT)로 불림
 </br>
 
-![그림 1](https://github.com/mollose/Security/assets/57161613/c1e28417-3ab0-4662-88a1-55cf1759f406){: width="70%" height="70%"}
 <img src="https://github.com/mollose/Security/assets/57161613/c1e28417-3ab0-4662-88a1-55cf1759f406" width="800">
 
 </br>

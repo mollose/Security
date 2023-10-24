@@ -152,3 +152,12 @@ SUB ESP, 8
   * WORD PTR SS:[EBP – 4] ≒ *(WORD*)(EBP – 4)
   * BYTE PTR SS:[EBP – 4] ≒ *(BYTE*)(EBP – 4)
   * ‘SS’를 명시하는 이유 : 해당 메모리가 어떤 세그먼트에 소속되어 있는지 표시. 32bit Windows OS에서 SS, DS, ES 값은 모두 0이므로 큰 의미는 없음
+ 
+<br/>
+
+* 함수가 리턴하기 직전에 EAX에 어떤 값을 입력하면 그대로 리턴값이 됨
+* 파라미터가 두 개인 함수 리턴 후, ADD ESP, 8 : 함수에 넘겨준 두 개의 파라미터가 스택에 그대로 남아있으므로 ESP에 8을 더하여 스택을 정리(이처럼 Caller에서 파라미터를 정리하는 방식을 cdecl, 반대로 Callee에서 파라미터를 정리하는 방식을 stdcall이라고 부름)
+* XOR EAX, EAX : main() 함수 리턴값(0) 세팅. 같은 값끼리 XOR 시 0이 되는 특성을 이용
+* main 함수 시작 이전과 종료 이후에는, 컴파일러에서 추가한 Stub Code 실행
+
+

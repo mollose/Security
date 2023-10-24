@@ -1437,7 +1437,8 @@ API 코드 패치 및 글로벌 후킹(Global hooking)
 <br/>
 
 ### 예시 #17: stealth.cpp
-* SetProcName()
+
+#### <ins>SetProcName()</ins>
 
 ```cpp
 // 공유 메모리 사용을 위한 섹션(섹션명 .SHARE) 설정
@@ -1459,9 +1460,10 @@ __declspec(dllexport) void SetProcName(LPCTSTR szProcName)
 #endif
 ```
 
-* DllMain() : 현재 프로세스가 HideProc.exe라면, 후킹하지 않고 종료(HideProc.exe는 DLL 인젝션을 위해 온전한 프로세스 리스트를 가져야 함)
+#### <ins>DllMain()</ins> 
+현재 프로세스가 HideProc.exe라면, 후킹하지 않고 종료(HideProc.exe는 DLL 인젝션을 위해 온전한 프로세스 리스트를 가져야 함)
 
-* hook_by_code()
+#### <ins>hook_by_code()</ins>
 
 ```cpp
 BOOL hook_by_code(LPCSTR szDllName, LPCSTR szFuncName, PROC pfnNew, PBYTE pOrgBytes)
@@ -1487,9 +1489,10 @@ BOOL hook_by_code(LPCSTR szDllName, LPCSTR szFuncName, PROC pfnNew, PBYTE pOrgBy
 }
 ```
 
-* unhook_by_code : 덮어쓴 5byte 위치의 메모리에 WRITE 속성을 추가한 뒤, pOrgBytes 매개변수로 전달된 원래 코드를 다시 덮어씀. 이후 메모리 속성 복원
+#### <ins>unhook_by_code</ins> 
+덮어쓴 5byte 위치의 메모리에 WRITE 속성을 추가한 뒤, pOrgBytes 매개변수로 전달된 원래 코드를 다시 덮어씀. 이후 메모리 속성 복원
 
-* NewZwQuerySystemInformation()
+#### <ins>NewZwQuerySystemInformation()</ins>
 
 ```cpp
 // SYSTEM_INFORMATION_CLASS 자료형을 사용하기 위해서는, Winternl.h 헤더를 포함함으로써 내부 API 프로토타입을 노출시켜야 함

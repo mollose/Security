@@ -491,7 +491,7 @@ IMAGE_IMPORT_DESCRIPTOR의 Name 멤버의 RVA 값은 Header 영역에 속하며,
 <br/>
 
 <p align="center">
- <img src="https://github.com/mollose/Security/assets/57161613/841094b1-7f07-478b-b8b5-99e5733868eb" width="700">
+ <img src="https://github.com/mollose/Security/assets/57161613/841094b1-7f07-478b-b8b5-99e5733868eb" width="400">
 </p><br/>
 
 ```
@@ -540,7 +540,7 @@ Windows는 Event Driven 방식으로 동작하는 GUI 제공. 이벤트 발생 �
 <br/>
 
 <p align="center">
- <img src="https://github.com/mollose/Security/assets/57161613/a8fb0b89-6798-4467-b78b-1b3067a40491" width="700">
+ <img src="https://github.com/mollose/Security/assets/57161613/a8fb0b89-6798-4467-b78b-1b3067a40491" width="400">
 </p><br/>
 
 ### 키보드 입력 메시지의 처리 과정

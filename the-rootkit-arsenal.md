@@ -105,3 +105,35 @@ CR3 레지스터는 page directory의 첫 바이트 물리 주소를 가지며, 
 
 #### 특권 검사
 Privilege-level 검사는 4개의 privilege level에 기반. 특권 검사는 바깥 링에 위치하는 프로세스가 안쪽 링에 존재하는 세그먼트에 고의로 접근하는 것을 막는 것. 특권 검사 적용을 위해 CPL, RPL, DPL의 세 가지 지표 사용. Current Privilege Level<strong>(CPL)은 기본적으로, 실행 중인 프로세스의 CS, SS 레지스터 내에 저장된 selector들의 RPL</strong> 값. 프로그램의 CPL은 일반적으로 현재 코드 세그먼트의 privilege level. far jump나 far call의 실행에 따라 CPL은 바뀔 수 있음. 프로세서의 세그먼트 레지스터 중 하나에 segment descriptor와 연관된 segment selector가 로드될 때 Privilege-level 검사 수행. 이는 프로그램이 다른 코드 세그먼트 내의 데이터에 접근하려 하거나 또는 세그먼트 간 점프를 통해 프로그램 제어를 옮길 때 발생. 만약 프로세서가 Privilege-level 위반을 식별하면 일반 보호 예외 발생. 다른 데이터 세그먼트 내의 데이터에 접근할 때 데이터 세그먼트의 selector가 반드시 스택 세그먼트(SS) 레지스터나 데이터 세그먼트 레지스터(DS, ES, FS, GS)에 로드되어야 함. 프로그램이 다른 코드 세그먼트로 점프하는 제어 변경을 시도할 때 목적지 코드 세그먼트의 segment selector가 CS 레지스터에 반드시 로드되어야 함. CS 레지스터는 명시적으로 변경될 수 없으며 JMP, CALL, RET, INT, IRET, SYSENTER, SYSEXIT 등의 명령어에 의해 암시적으로만 변경 가능. 다른 세그먼트 내의 **데이터 접근 시 프로세서는 DPL이 RPL과 CPL 둘보다 크거나 같음**을 보장하기 위해 검사 진행(DPL은 프로그램이나 태스크가 세그먼트에 액세스를 허용해야 하는 가장 낮은 권한 레벨(숫자상으로 가장 높은)을 나타냄). 만약 조건이 성립한다면 프로세서는 해당 데이터 세그먼트의 segment selector를 데이터 세그먼트 레지스터에 로드할 것. 다른 세그먼트 내의 데이터에 **접근하려는 프로세스는 해당 데이터 세그먼트의 segment selector의 RPL 값을 제어**. SS 레지스터에 새로운 스택 세그먼트의 segment selector를 로드할 때, **스택 세그먼트의 DPL과 segment selector의 RPL은 모두 CPL**과 일치해야 함. nonconforming 코드 세그먼트(NCCS)는 보다 낮은 특권(보다 높은 CPL)에서 실행하는 프로그램에 의해 접근될 수 없는 코드 세그먼트로, **nonconforming 코드 세그먼트로 제어를 옮길 때 호출 루틴의 CPL은 목적지 세그먼트의 DPL**과 같아야 함. 목적지 세그먼트와 연관된 segment selector의 **RPL은 CPL보다 작거나 같아**야 함. **conforming 코드 세그먼트(CCS)로 제어를 옮길 때 호출 루틴의 CPL은 목적지 세그먼트의 DPL보다 크거나 같아**야 함. 이 경우 목적지 세그먼트의 segment selector의 **RPL 값은 검사되지 않음**
+* 프로세서는 프로그램 제어가 다른 권한 레벨을 가진 코드 세그먼트로 전이될 때 CPL을 변경
+* DPL은 세그먼트나 게이트가 액세스되고 있는 타입에 따라 다르게 해석됨
+* 프로그램이나 태스크가 세그먼트에 접근하기 위한 충분한 권한을 갖더라도 만약 RPL이 그렇지 못하다면 접근은 거부됨. RPL이 **CPL보다 낮은 권한 레벨(숫자상 높은)인 경우 RPL은 CPL을 오버라이드**. RPL은 만약 프로그램 자체가 세그먼트에 대한 액세스 권한을 갖고 있지 않다면 프로그램 대신 privileged code가 세그먼트에 접근하지 않는 것을 보장
+* 코드 세그먼트 직접 접근에 대한 일반적인 규칙은 세그먼트와 동일한 특권하에서만 그럴 수 있다는 것(NCCS의 사용). 보다 낮은 특권의 애플리케이션에서도 코드 세그먼트에 접근 가능하도록(호출자의 **특권을 상승시키지 않으면서) CCS** 등장. 따라서 코드 세그먼트에 대한 직접 접근은 결코 현재 특권을 변경하지 않음(스택 변경도 없음). **CPL의 변경을 위해 call gate** 등장
+
+#### 제한 명령어 검사
+프로그램이 보다 낮은 CPL 값으로 제한된 명령어를 사용하려 하지 않음을 검증. LGDT, LLDT(LDTR 레지스터 로드), MOV(제어 레지스터로 값을 옮김), HLT(프로세서 중지), WRMSR(모델 특정 레지스터(MSR)에 쓰기 작업 수행) 등은 CPL이 0(가장 높은 privilege level)일 때만 실행되도록 제한된 명령어
+
+#### Gate Descriptor
+Gate descriptor들은 프로그램이 다른 privilege level로 코드 세그먼트에 접근할 수 있는 방법 제공. Gate descriptor는 system descriptor라는 점에서 특별(segment descriptor의 S 플래그가 클리어된 상태). 이러한 게이트들은 16비트 또는 32비트가 될 수 있음. 만약 코드 세그먼트 간 점프로 인해 스택 변경이 이루어져야 한다면, 새로운 스택에 푸시되어야 할 값이 16비트 푸시 또는 32비트 푸시로 축적될지를 결정(gate descriptor들의 종류는 segment descriptor의 type 필드로 식별됨)
+
+##### Call-gate descriptor
+(16비트의 경우 0100, 32비트의 경우 1100) GDT 내에 상주. 몇몇 차이점을 제외하고 segment descriptor의 구성과 매우 유사. 예를 들어 32비트 base 선형 주소 대신 16비트 segment selector와 32비트 오프셋 주소를 저장. Call-gate descriptor 내의 segment selector는 GDT 내의 코드 세그먼트 descriptor를 참조. 오프셋 주소는 해당 코드 세그먼트 descriptor에 더해져 목적지 코드 세그먼트 내의 루틴의 선형 주소를 나타냄. 이때, 원래 논리 주소의 effective address는 쓰이지 않음(segment selector만 call gate를 가리키는데 쓰임). 프로그램이 call gate를 이용하여 새로운 코드 세그먼트로 점프할 때 충족되어야 할 조건 첫째로, 프로그램의 CPL과 segment selector의 RPL은 반드시 call-gate descriptor의 DPL보다 작거나 같아야 하며, 둘째로 프로그램의 CPL은 목적지 코드 세그먼트의 DPL보다 크거나 같아야 함
+
+##### Interrupt-gate descriptor와 Trap-gate descriptor 
+(Interrupt-gate 16비트의 경우 0100, 32비트의 경우 1110. Trap-gate 16비트의 경우 0111, 32비트의 경우 1111) Call-gate descriptor와 유사하게 동작. 대신 이들은 interrupt descriptor table(IDT) 내에 상주. Interrupt-gate와 Trap-gate descriptor 모두 segment selector와 effective address를 저장하고 있으며, segment selector는 GDT 내의 코드 segment descriptor를 명시하고 effective address는 코드 세그먼트의 base 주소에 더해져 선형 주소 공간 내의 interrupt / trap handling 루틴을 가리킴. interrupt-gate descriptor와 trap-gate descriptor의 유일한 차이점은 프로세서가 EFLAGS 레지스터 내의 IF 플래그를 조작하는 방식에 있음. interrupt-gate descriptor를 통해 interrupt handling routine에 접근할 때 프로세서는 IF를 클리어하지만, trap-gate의 경우엔 반대로 IF 변경을 요구하지 않음. handling 루틴을 불러일으키는 프로그램의 CPL은 interrupt 또는 trap gate의 DPL보다 작거나 같아야 하는데 이러한 조건은 소프트웨어에 의해 handling 루틴이 호출되는 경우(INT 등)에만 유지됨. 또한 call gate와 마찬가지로 handling 루틴의 코드 세그먼트를 가리키는 segment descriptor의 DPL은 프로그램의 CPL보다 작거나 같아야 함
+
+#### Protected-Mode Interrupt Table
+real mode와 달리 protected mode에선 IDT가 IVT를 대신함. IDT는 64비트 gate descriptor들의 배열을 저장하고 있음(interrupt-gate, trap-gate, task-gate descriptors). IVT와는 달리 IDT는 선형 주소 공간 내 어디에나 상주 가능. IDT 32비트 base 주소가 48비트 IDTR 레지스터의 bits 16 ~ 47에 위치하며, IDT의 크기 제한은 bits 0 ~ 15에 위치. LIDT 명령은 IDTR 값의 세팅에 사용될 수 있고 SIDT 명령은 IDTR 레지스터 값을 읽는데 사용됨. 크기 제한은 IDT의 base 주소에서 테이블의 마지막 엔트리까지의 바이트 오프셋으로, N개의 엔트리를 갖는 IDT는 (8(N – 1))의 제한을 가질 것. 만약 크기 제한을 넘는 벡터가 참조될 때 프로세서는 일반 보호 예외를 발생시킴. protected mode에서 벡터 0 ~ 31은 머신 특정적인 예외와 인터럽트를 위해 IA-32 프로세서에 의해 예약되어 있음. 나머지는 유저 정의 인터럽트에 사용 가능
+
+#### 페이징을 통한 보호
+IA-32 프로세서에서 제공하는 페이징 기능 역시 메모리 보호 구현에 사용 가능. 세그먼테이션을 통한 메모리 보호와 마찬가지로 페이지 층위의 검사도 메모리 사이클 초기화 이전에 수행. 페이지 층위 검사는 주소 해상 과정과 동시에 이루어지므로 성능 저하는 발생하지 않음. 메모리 층위 검사 위반 발생 시 페이지 폴트 예외가 프로세서에 의해 일어남. protected mode 역시 segmented memory 모델의 한 예이기에 IA-32 프로세서에서 세그먼테이션은 필수적. 반면 페이징은 선택적. 페이징이 활성화된 상태라 하더라도 CR0 레지스터의 WP 플래그를 클리어하고 각 PDE와 PTE의 R/W, U/S 플래그를 세팅함으로써 페이징을 통한 보호를 비활성화 가능(이는 모든 메모리 페이지를 쓰기 가능 상태로 만들고 유저 privilege level을 갖게 하며, supervisor level 코드가 읽기 전용 user level 페이지에 쓰는 것을 허용). 만약 세그먼테이션과 페이징이 모두 메모리 보호에 사용된다면 **세그먼트 층위의 검사가 먼저 수행되고, 이어서 페이지 검사**가 수행됨. 세그먼트 층위 위반은 일반 보호 예외를, 페이지 층위 위반은 페이지 폴트 예외를 발생시킴. 게다가 **세그먼트 층위 보호 설정은 페이지 층위 보호 설정에 의해 오버라이드되지 않음**(ex. 코드 세그먼트 내의 페이지와 연관된 페이지 테이블 내의 R/W 비트 세팅은 페이지를 쓰기 가능 상태로 만들지 못함). 페이징 활성화 상태라면 프로세서가 수행 가능한 두 가지 타입의 검사가 수행되는데 User / Supervisor 모드 검사와 Page-type 검사가 바로 그것. 선형 주소에 대한 모든 접근은 supervisor-mode 접근이거나 user-mode 접근. CPL이 3보다 작을 때 이루어지는 모든 접근은 supervisor-mode 접근이며, CPL = 3일 때 접근은 일반적으로 user-mode 접근. 하지만 선형 주소로 시스템 데이터 구조체를 암시적으로 접근하는 몇몇 동작들은 CPL과 상관없이 supervisor-mode 접근을 수행. segment descriptor를 로드하기 위한 GDT나 LDT 접근, 인터럽트나 예외 발생 시 IDT 접근, 태스크 전환이나 CPL 변경의 일환으로 수행되는 태스크 상태 세그먼트(TSS) 접근이 그 예. 다음은 페이징이 접근 권한을 결정하는데 있어서의 세부 사항들임
+
+##### supervisor-mode 접근
+* 데이터 읽기 : 데이터는 변환을 통해 어느 선형 주소에서든 읽혀질 수 있음
+* 데이터 쓰기 : 데이터는 변환을 통해 어느 선형 주소에서든 쓰일 수 있으나 CR0 레지스터의 WP 플래그가 1일 땐, 변환을 제어하는 모든 페이징 구조체 엔트리의 R/W 플래그가 1인 경우에만 가능
+* 명령어 패치 : 명령어는 변환을 통해 어느 선형 주소에서든 패치될 수 있으나 CR4 레지스터의 SMEP 플래그가 1일 땐, 변환을 제어하는 페이징 구조체 엔트리 중 최소 하나의 U/S 플래그가 0인 경우에만 가능
+
+##### user-mode 접근
+* 데이터 읽기 : 데이터는 변환을 제어하는 모든 페이징 구조체 엔트리의 U/S 플래그가 1인 경우, 변환을 통해 어느 선형 주소에서든 읽혀질 수 있음
+* 데이터 쓰기 : 데이터는 변환을 제어하는 모든 페이징 구조체 엔트리의 R/W 플래그와 U/S 플래그가 모두 1인 경우, 변환을 통해 어느 선형 주소에서든 읽혀질 수 있음
+* 명령어 패치 : 명령어는 변환을 제어하는 모든 페이징 구조체 엔트리의 U/S 플래그가 1인 경우, 변환을 통해 어느 선형 주소에서든 패치될 수 있음

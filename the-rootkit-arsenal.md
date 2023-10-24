@@ -216,3 +216,31 @@ ASLR과 DEP는 사용될 때 가장 효과적
 
 ##### /SAFESEH 링커 옵션 
 만약 /SAFESEH 옵션이 IA-32 시스템에서 명시된다면 링커는 바이너리의 헤더에 모듈의 유효한 예외 핸들러의 목록을 갖는 특수한 테이블을 삽입. 실행 중에 예외 발생 시, 예외 처리에 책임이 있는 ntdll.dll 내의 코드는 현재 스택에 위치한 예외 핸들러 레코드가 테이블에 명시된 핸들러 중 하나인지를 확인할 것
+
+#### Native API
+전통적으로 UNIX와 같은 OS는 항상 명확하게 정의된 well-documented system call 셋을 포함해왔음. 반면 윈도우의 경우 Native API라는 system call 인터페이스를 가지며 Windows API 뒤에 그것들을 감추어왔음. 이러한 방식 덕분에 만약 system call 인터페이스 업데이트를 포함하는 시스템 패치가 이루어지더라도 개발자는 이에서 소외되지 않을 수 있는데, 그들의 코드는 Windows API에 의존하고 있기 때문
+
+##### The IVT Grows Up
+MS-DOS 같은 real-mode OS에서 IVT는 가장 주된 시스템 레벨 구조체였으며 커널로 통하는 정식 입구였음. 모든 DOS system call은 소프트웨어로부터 발생한 인터럽트에 의해 호출될 수 있었음(함수 코드가 AH 레지스터에 놓인 상황에서의 INT 0x21 명령어를 통해). 그러나 IVT가 IDT로 재탄생하며, 중심적인 커널 입구 구조체로서의 기능을 잃게 되었음
+
+##### IDT 세부 사항
+윈도우 시작 시, 구동되는 프로세서의 종류를 검사하고 system call 호출들을 그에 맞게 조정(펜티엄 II 이전 프로세서의 경우 INT 0x2E 명령어가 system call에 사용되고, IA-32 프로세서의 경우 SYSENTER 명령어를 사용하여 IDT를 커널 영역으로의 점프의 의무에서 해방). 가장 현대의 윈도우 구성은 하드웨어 발생 신호를 처리하고 프로세서 예외에 응답하는 데만 IDT를 사용. Intel의 스펙에 따르면 IDT는 최대 256개의 8바이트 descriptor를 유지할 수 있음(IDT의 베이스 주소와 크기는 IDTR, IDTL 레지스터를 덤프하여 알 수 있음). !idt 명령 사용 시, 콘솔로 스트림된 254개의 엔트리 중 1/4 이하가 의미 있는 루틴을 참조. 대다수의 엔트리가 KiUnexpectedInterrupt 루틴을 참조하고 있음. 이러한 KiUnexpectedInterrupt 루틴들은 메모리상에서 연속적으로 정렬되어 있으며 그들은 모두 KiEndUnexpectedRange 함수를 호출하는 것으로 끝이 남. 또한 이전의 프로세서들을 위한 커널 영역 점프 기능은 여전히 IDT 엔트리 0x2E에 상주하고 있음(KiSystemService. 내부적으로는 KiFastCallEntry의 중간 부분을 호출하고 있음). 이는 시스템 서비스 디스패처로, Native API 루틴의 주소를 지정하고 이를 호출하는데 그것에 상속된(유저모드로부터) 정보를 사용
+
+##### 인터럽트 기반 system call
+INT 0x2E가 system call 호출에 사용될 때 system service number(또는 dispatch ID)가 EAX 레지스터에 세팅됨(real-mode를 연상). 또한 호출자의 인자 목록의 주소가 EDX 레지스터에 세팅되며 최종적으로 인터럽트가 이루어짐
+
+##### SYSENTER 명령어
+SYSENTER가 호출되기 전 3개의 64비트 machine-specific register(MSR)들이 입력되어 프로세서가 점프해야 할 목적지와 커널모드 스택의 위치를 알도록 해야 함(유저모드 스택의 정보를 복사해야 하는 경우에). 이러한 MSR들은 RDMSR과 WRMSR 명령어로 조작될 수 있음
+* IA32_SYSENTER_CS(주소값 0x174) : 커널모드 코드와 스택 segment selector 명시
+* IA32_SYSENTER_ESP(주소값 0x175) : 커널모드 스택 포인터의 위치를 명시
+* IA32_SYSENTER_EIP(주소값 0x176) : 커널모드 코드의 EP를 명시
+* IA32_SYSENTER_CS와 IA32_SYSENTER_EIP 레지스터 덤프 시 그들이 KiFastCallEntry 루틴을 명시하고 있음을 알 수 있음. IA32_SYSENTER_CS에 저장된 segment selector는 전체 주소 영역에 걸쳐 있는 Ring 0 코드 세그먼트와 연관되어 있음. 그리고 IA32_SYSENTER_EIP는 KiFastCallEntry 루틴의 완전한 32비트 선형 주소를 오프셋으로서 담고 있음
+* INT 0x2E의 경우와 마찬가지로, SYSENTER 명령어 실행 전에 system service number가 EAX 레지스터에 위치해 있어야 하며 EDX 레지스터는 호출자의 인자 목록을 가리키는 것이 됨
+
+##### 시스템 서비스 디스패치 테이블
+system service number는 32비트 값으로, 처음 12비트는 어떤 시스템 서비스가 최종적으로 호출될 것인지를, Bits 12, 13은 4개의 가능한 service descriptor table 중 하나를 명시. 비록 4개의 descriptor table이 가능하지만 커널 영역 내에서 가시적인 심볼을 갖는 테이블은 KeServiceDescriptorTable(Ntoskrnl.exe에 의해 익스포트됨)과 KeServiceDescriptorTableShadow(익스큐티브 경계 내에서만 보여짐)뿐. Bits 12, 13이 00이라면(system service number는 0x0000 ~ 0x0FFF에 걸쳐 있음) KeServiceDescriptorTable이 사용되며, 만약 bits 12, 13이 01이라면(system service number는 0x1000 ~ 0x1FFF에 걸쳐 있음) KeServiceDescriptorTableShadow가 사용됨(0x2000 ~ 0x2FFF, 0x3000 ~ 0x3FFF는 service descriptor table을 위해 할당된 것으로 보이지 않음). 두 service descriptor table은 시스템 서비스 테이블(SST)이라는 하위 구조체들을 포함하고 있음. SST는 다음의 4개의 필드로 이루어진 구조체
+
+* serviceTable : 선형 주소들로 이루어진 배열의 첫 요소의 포인터를 담고 있는데 선형 주소들은 커널 영역 내 루틴의 EP들이며, 이러한 선형 주소들을 담고 있는 배열을 시스템 서비스 디스패치 테이블(SSDT)이라 부름. SSDT는 정신적으로 real-mode의 IVT와 같음
+* field2 : 윈도우 free build에서는 사용되지 않는 필드
+* nEntries : SSDT 배열 내의 엔트리 수를 명시
+* argumentTable : 바이트들로 이루어진 배열의 첫 요소의 포인터를 담고 있는데 배열 내의 각 바이트는 연관된 SSDT 루틴 호출 시 함수 인자를 위해 할당하는 공간의 바이트 크기를 나타냄. 이러한 배열은 시스템 서비스 파라미터 테이블(SSPT)로 불림

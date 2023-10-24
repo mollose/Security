@@ -148,3 +148,7 @@ SUB ESP, 8
 ```
 
 * MOV DWORD PTR SS:[EBP – 4], 1과 같이 접근 가능(로컬 변수 접근)
+  * DWORD PTR SS:[EBP – 4] ≒ *(DWORD*)(EBP – 4)
+  * WORD PTR SS:[EBP – 4] ≒ *(WORD*)(EBP – 4)
+  * BYTE PTR SS:[EBP – 4] ≒ *(BYTE*)(EBP – 4)
+  * ‘SS’를 명시하는 이유 : 해당 메모리가 어떤 세그먼트에 소속되어 있는지 표시. 32bit Windows OS에서 SS, DS, ES 값은 모두 0이므로 큰 의미는 없음

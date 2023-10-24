@@ -41,10 +41,10 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 ##### <ins>Hardware interrupt</ins>
 외부 디바이스에 의해 예상치 못하게 발생. CLI 명령어로 IF를 클리어함으로써 해제 가능한 maskable interrupt와 해제 불가능한 nonmaskable interrupt로 나뉨
 
-##### Software interrupt
+##### <ins>Software interrupt</ins>
 INT 명령어를 사용하는 프로그램에 의해 구현됨. INT 명령어는 interrupt vector를 지정하는 하나의 operand를 가짐. INT 명령어 실행 시 TF와 IF를 클리어함. FLAGS, CS, IP 레지스터를 순서대로 스택에 저장한 뒤, 인터럽트 벡터를 통해 ISR의 주소로 이동. IRET 명령어를 만날 때까지 ISR의 코드를 실행. **IRET은 스택에 저장된 값들을 다시 꺼낸 후** INT 명령 이후의 명령어들에 대해 실행 재개
 
-##### Exception
+##### <ins>Exception</ins>
 프로세서가 명령어 실행 도중 faults, traps, aborts 등의 에러를 감지했을 때 발생
   * fault : fault 발생 시, 프로세서는 예외를 발생시킨 명령어 앞의 명령어 경계에서 예외를 보고. 따라서 프로그램의 상태는 예외 이전의 상태로 리셋될 수 있고 명령어 재실행 가능. divided by zero(0) 등이 fault에 해당
   * trap : 명령어 재실행 불가. 프로세서는 예외를 발생시킨 명령어 뒤의 경계에서 예외를 보고. breakpoint(3), overflow(4) 등이 fault에 해당
@@ -116,10 +116,10 @@ Privilege-level 검사는 4개의 privilege level에 기반. 특권 검사는 �
 #### *Gate Descriptor*
 Gate descriptor들은 프로그램이 다른 privilege level로 코드 세그먼트에 접근할 수 있는 방법 제공. Gate descriptor는 system descriptor라는 점에서 특별(segment descriptor의 S 플래그가 클리어된 상태). 이러한 게이트들은 16비트 또는 32비트가 될 수 있음. 만약 코드 세그먼트 간 점프로 인해 스택 변경이 이루어져야 한다면, 새로운 스택에 푸시되어야 할 값이 16비트 푸시 또는 32비트 푸시로 축적될지를 결정(gate descriptor들의 종류는 segment descriptor의 type 필드로 식별됨)
 
-##### Call-gate descriptor
+##### <ins>Call-gate descriptor</ins>
 (16비트의 경우 0100, 32비트의 경우 1100) GDT 내에 상주. 몇몇 차이점을 제외하고 segment descriptor의 구성과 매우 유사. 예를 들어 32비트 base 선형 주소 대신 16비트 segment selector와 32비트 오프셋 주소를 저장. Call-gate descriptor 내의 segment selector는 GDT 내의 코드 세그먼트 descriptor를 참조. 오프셋 주소는 해당 코드 세그먼트 descriptor에 더해져 목적지 코드 세그먼트 내의 루틴의 선형 주소를 나타냄. 이때, 원래 논리 주소의 effective address는 쓰이지 않음(segment selector만 call gate를 가리키는데 쓰임). 프로그램이 call gate를 이용하여 새로운 코드 세그먼트로 점프할 때 충족되어야 할 조건 첫째로, 프로그램의 CPL과 segment selector의 RPL은 반드시 call-gate descriptor의 DPL보다 작거나 같아야 하며, 둘째로 프로그램의 CPL은 목적지 코드 세그먼트의 DPL보다 크거나 같아야 함
 
-##### Interrupt-gate descriptor와 Trap-gate descriptor 
+##### <ins>Interrupt-gate descriptor와 Trap-gate descriptor</ins>
 (Interrupt-gate 16비트의 경우 0100, 32비트의 경우 1110. Trap-gate 16비트의 경우 0111, 32비트의 경우 1111) Call-gate descriptor와 유사하게 동작. 대신 이들은 interrupt descriptor table(IDT) 내에 상주. Interrupt-gate와 Trap-gate descriptor 모두 segment selector와 effective address를 저장하고 있으며, segment selector는 GDT 내의 코드 segment descriptor를 명시하고 effective address는 코드 세그먼트의 base 주소에 더해져 선형 주소 공간 내의 interrupt / trap handling 루틴을 가리킴. interrupt-gate descriptor와 trap-gate descriptor의 유일한 차이점은 프로세서가 EFLAGS 레지스터 내의 IF 플래그를 조작하는 방식에 있음. interrupt-gate descriptor를 통해 interrupt handling routine에 접근할 때 프로세서는 IF를 클리어하지만, trap-gate의 경우엔 반대로 IF 변경을 요구하지 않음. handling 루틴을 불러일으키는 프로그램의 CPL은 interrupt 또는 trap gate의 DPL보다 작거나 같아야 하는데 이러한 조건은 소프트웨어에 의해 handling 루틴이 호출되는 경우(INT 등)에만 유지됨. 또한 call gate와 마찬가지로 handling 루틴의 코드 세그먼트를 가리키는 segment descriptor의 DPL은 프로그램의 CPL보다 작거나 같아야 함
 
 #### *Protected-Mode Interrupt Table*
@@ -128,12 +128,12 @@ real mode와 달리 protected mode에선 IDT가 IVT를 대신함. IDT는 64비�
 #### *페이징을 통한 보호*
 IA-32 프로세서에서 제공하는 페이징 기능 역시 메모리 보호 구현에 사용 가능. 세그먼테이션을 통한 메모리 보호와 마찬가지로 페이지 층위의 검사도 메모리 사이클 초기화 이전에 수행. 페이지 층위 검사는 주소 해상 과정과 동시에 이루어지므로 성능 저하는 발생하지 않음. 메모리 층위 검사 위반 발생 시 페이지 폴트 예외가 프로세서에 의해 일어남. protected mode 역시 segmented memory 모델의 한 예이기에 IA-32 프로세서에서 세그먼테이션은 필수적. 반면 페이징은 선택적. 페이징이 활성화된 상태라 하더라도 CR0 레지스터의 WP 플래그를 클리어하고 각 PDE와 PTE의 R/W, U/S 플래그를 세팅함으로써 페이징을 통한 보호를 비활성화 가능(이는 모든 메모리 페이지를 쓰기 가능 상태로 만들고 유저 privilege level을 갖게 하며, supervisor level 코드가 읽기 전용 user level 페이지에 쓰는 것을 허용). 만약 세그먼테이션과 페이징이 모두 메모리 보호에 사용된다면 **세그먼트 층위의 검사가 먼저 수행되고, 이어서 페이지 검사**가 수행됨. 세그먼트 층위 위반은 일반 보호 예외를, 페이지 층위 위반은 페이지 폴트 예외를 발생시킴. 게다가 **세그먼트 층위 보호 설정은 페이지 층위 보호 설정에 의해 오버라이드되지 않음**(ex. 코드 세그먼트 내의 페이지와 연관된 페이지 테이블 내의 R/W 비트 세팅은 페이지를 쓰기 가능 상태로 만들지 못함). 페이징 활성화 상태라면 프로세서가 수행 가능한 두 가지 타입의 검사가 수행되는데 User / Supervisor 모드 검사와 Page-type 검사가 바로 그것. 선형 주소에 대한 모든 접근은 supervisor-mode 접근이거나 user-mode 접근. CPL이 3보다 작을 때 이루어지는 모든 접근은 supervisor-mode 접근이며, CPL = 3일 때 접근은 일반적으로 user-mode 접근. 하지만 선형 주소로 시스템 데이터 구조체를 암시적으로 접근하는 몇몇 동작들은 CPL과 상관없이 supervisor-mode 접근을 수행. segment descriptor를 로드하기 위한 GDT나 LDT 접근, 인터럽트나 예외 발생 시 IDT 접근, 태스크 전환이나 CPL 변경의 일환으로 수행되는 태스크 상태 세그먼트(TSS) 접근이 그 예. 다음은 페이징이 접근 권한을 결정하는데 있어서의 세부 사항들임
 
-##### supervisor-mode 접근
+##### <ins>supervisor-mode 접근</ins>
 * 데이터 읽기 : 데이터는 변환을 통해 어느 선형 주소에서든 읽혀질 수 있음
 * 데이터 쓰기 : 데이터는 변환을 통해 어느 선형 주소에서든 쓰일 수 있으나 CR0 레지스터의 WP 플래그가 1일 땐, 변환을 제어하는 모든 페이징 구조체 엔트리의 R/W 플래그가 1인 경우에만 가능
 * 명령어 패치 : 명령어는 변환을 통해 어느 선형 주소에서든 패치될 수 있으나 CR4 레지스터의 SMEP 플래그가 1일 땐, 변환을 제어하는 페이징 구조체 엔트리 중 최소 하나의 U/S 플래그가 0인 경우에만 가능
 
-##### user-mode 접근
+##### <ins>user-mode 접근</ins>
 * 데이터 읽기 : 데이터는 변환을 제어하는 모든 페이징 구조체 엔트리의 U/S 플래그가 1인 경우, 변환을 통해 어느 선형 주소에서든 읽혀질 수 있음
 * 데이터 쓰기 : 데이터는 변환을 제어하는 모든 페이징 구조체 엔트리의 R/W 플래그와 U/S 플래그가 모두 1인 경우, 변환을 통해 어느 선형 주소에서든 읽혀질 수 있음
 * 명령어 패치 : 명령어는 변환을 제어하는 모든 페이징 구조체 엔트리의 U/S 플래그가 1인 경우, 변환을 통해 어느 선형 주소에서든 패치될 수 있음
@@ -163,32 +163,32 @@ msinfo32 커맨드를 통해 실제 물리 메모리의 전체 공간을 사용�
 #### *윈도우상의 세그먼테이션과 페이징*
 OS와 유저 애플리케이션 간 경계는 하드웨어 기반 메커니즘에 크게 의존. 윈도우는 세그먼테이션보다 페이징에 더 의존하는 경향이 있음. 세그먼트 privilege 파라미터들을 통한 4개의 링 모델은 supervisor level(커널모드) 또는 user level(유저모드) 둘 중 하나에서 코드가 구동되는 두 개의 링 모델로 단순화됨. 이 구분은 시스템의 PDE와 PTE들 내의 U/S 비트에 기반을 둠
 
-##### 세그먼테이션
+##### <ins>세그먼테이션</ins>
 윈도우는 GDT에서 전체 선형 주소 공간(0x00000000 ~ 0xFFFFFFFF)을 코드와 데이터 세그먼트로 정의하는 4개의 descriptor를 갖는데, 이들은 또한 같은 영역에서 링 0와 링 3의 세그먼트를 동시에 규정. 본질적으로 세그먼테이션은 없게 됨. 이는 페이징을 통해 보안이 구현되는 것을 허용함(윈도우가 Intel 하드웨어가 제공하는 모든 기능을 사용하는 것은 아님)
 
-##### 페이징 
+##### <ins>페이징</ins>
 윈도우에서 각 프로세스는 자신만의 페이지 디렉터리를 가짐. 연관된 CR3값은 KPROCESS 구조체 내의 DirectoryTableBase 필드 내에 저장됨(!process 출력의 DirBase). 선형 주소 0x7FFFFFFF에서 0x80000000으로 넘어갈 때 PDE 엔트리의 U/S 플래그에서 전환이 일어나는데, 이것이 바로 윈도우가 두 개의 링의 메모리 보호를 구현하는 방식
 
-##### 선형 – 물리 주소 변환
+##### <ins>선형 – 물리 주소 변환</ins>
 윈도우 메모리 관리자는 0xC0000000에서 시작하는 선형 주소 공간 내에 페이지 테이블들을 로드(한편, 페이지 디렉터리들의 경우 x86 시스템에선 0xC0300000, PAE 활성화 시 0xC0600000)
 > PTE 선형 주소 = 페이지 테이블 시작 주소 + 페이지 디렉터리 인덱스 * 페이지 테이블당 크기(바이트) + 페이지 테이블 인덱스 * PTE 크기(바이트)
 
 #### *유저 영역과 커널 영역*
 윈도우는 물리 메모리를 시뮬레이션하기 위해 디스크 공간 사용. 윈도우에서 각 프로세스는 고유의 CR3 레지스터 값을 가지며 고유의 가상 주소 공간을 가짐
 
-##### 4GB 튜닝(4GT) 
+##### <ins>4GB 튜닝(4GT)</ins>
 BCD의 increaseuserva 옵션을 활성화하여 IMAGE_FILE_LARGE_ADDRESS_AWARE 플래그가 세팅된 애플리케이션에 한해 3GB의 유저 메모리 허용
 
-##### To Each His Own
+##### <ins>To Each His Own</ins>
 같은 커널 주소 공간의 공유는 각 프로그램의 supervisor-level PDE들을 같은 시스템 페이지 테이블 셋에 매핑함으로써 구현
 
-##### Jumping the Fence 
+##### <ins>Jumping the Fence</ins>
 커널의 주소 공간은 보호받고 있어서 애플리케이션 스레드는 커널 영역에 접근하기 위해 시스템 콜 게이트를 통과해야 하지만, 스레드는 SYSENTER 명령어를 통해서 유저 영역과 커널 영역을 넘나들 수 있음. 이는 유저 애플리케이션이 자의적으로 커널 영역을 넘나들고 privileged 코드를 충동적으로 실행하는 것을 방지
 
-##### 커널 영역 동적 할당
+##### <ins>커널 영역 동적 할당</ins>
 Windows Vista와 Windows Server 2008 이후 커널은 변화하는 요구의 수용을 위해 내부 구조체들을 동적으로 할당하고 재배치할 수 있게 됨
 
-##### 주소 윈도잉 확장(AWE) 
+##### <ins>주소 윈도잉 확장(AWE)</ins>
 AWE는 32비트 유저 애플리케이션이 64GB까지의 물리 메모리에 접근하는 것을 허용. 이 기능은 winbase.h에 선언된 API를 기반으로 하고 있으며 이는 이 API를 사용한 프로그램이 선형 주소 공간에 의해 주어진 제한보다 큰 크기의 물리 메모리 범위에 접근하는 것을 허용하는 방식. AWE API 루틴으로는 VirtualAlloc(), VirtualAllocEx(), AllocateUserPhysicalPages(), MapUserPhysicalPages(), MapUserPhysicalPagesScatter(), FreeUserPhysicalPages()가 있음. AWE는 애플리케이션의 선형 주소 공간 내에 고정 크기 영역(window)들을 할당하고 물리 메모리 내의 더욱 큰 고정 크기 window들에 매핑한다는 점에서 주소 윈도잉 확장으로 불림. AWE를 통해 할당된 메모리는 페이징되지 않음(non-paged). AWE는 엄밀히 Microsoft의 기술이지만(또한 PAE 없이도 사용될 수 있음), 만약 애플리케이션이 4GB 경계 이상의 물리 메모리에 접근하는데 AWE API를 사용한다면 PAE의 활성화는 필요할 것. 또한 AWE 루틴을 호출하는 애플리케이션을 실행하는 유저는 ‘Lock Pages in Memory’ 특권 필요
 
 4GT는 선형 주소 공간을 재분할해 유저 애플리케이션이 더욱 큰 영역을 가질 수 있게 하나, 만약 애플리케이션이 3GB보다 큰 영역을 요구할 경우 AWE를 사용할 수 있음. AWE를 사용하는 애플리케이션에서 4GB 이상의 물리 메모리를 요구하면 PAE의 활성화가 필요할 수 있음
@@ -196,40 +196,40 @@ AWE는 32비트 유저 애플리케이션이 64GB까지의 물리 메모리에 �
 #### *유저모드와 커널모드*
 유저 영역은 유저모드에서 실행되는 코드를 포함하고 있음. 유저모드에서 실행되는 코드는 커널 영역 내의 어떤 것도 접근할 수 없으며 하드웨어와 직접 통신하는 것도, privileged 명령어를 실행하는 것도 불가능. 커널 영역 내의 코드는 커널모드에서 실행되며 유저모드의 코드에서 할 수 없는 모든 것이 가능
 
-##### 커널모드 컴포넌트
+##### <ins>커널모드 컴포넌트</ins>
 HAL의 경우 interrupt controller들을 처리하기도 함(cf. halacpi.dll, halmacpi.dll). 파일의 PE 헤더를 조사하며 각 커널 모듈 간 import 관계 확인 가능
 
-##### 유저모드 컴포넌트
+##### <ins>유저모드 컴포넌트</ins>
 환경 서브시스템은 유저모드에서 동작하는 바이너리 셋으로 특정 환경 및 API를 사용하도록 작성된 애플리케이션이 작동할 수 있도록 함(다른 운영 체제에서 동작하는 프로그램이 눈에 띄는 변화 없이 서브시스템 위에서 실행될 수 있게 함). Windows 서브시스템은 Csrss.exe, Win32k.sys, 서브시스템 API를 구현하는 유저모드 DLL로 이루어짐. Windows 서브시스템이 유저 애플리케이션에 노출하는 인터페이스(Windows API)는 Win32 API와 많이 닮아 있음
 
 #### *기타 메모리 보호 기능들*
 유저모드에서 애플리케이션을 실행하는 것 외에도 윈도우가 프로그램의 주소 공간의 무결성을 보장하기 위해 구현하는 기능들이 존재
 
-##### 데이터 실행 방지(DEP)
+##### <ins>데이터 실행 방지(DEP)</ins>
 DEP는 Software-enforced와 Hardware-enforced 유형으로 나뉨. Software-enforced DEP는 Microsoft가 포함시킨, 보다 약한 구현. Hardware-enforced DEP는 IA32-EFER 머신 특정 레지스터의 NXE 플래그의 세팅을 요구. 비트가 세팅되어 있고 그리고 PAE 활성화 상태라면 PDE와 PTE의 64번째 비트가 XD라는 특수한 플래그로 변경됨. 만약 IA32_EFER = 1이고 XD = 1이라면 현재 참조되는 페이지로부터 꺼내지는 명령어들은 허용되지 않음. DEP는 BCD의 nx 정책 설정 세팅을 통해 부팅 시점에 구성됨. 특정 프로세스의 DEP와 연관된 엔트리들은 관련 KPROCESS 구조체 내의 KEXECUTE_OPTIONS 구조체에 위치해 있음(DEP 활성화 시 ExecuteDisable 필드가 1로 세팅되며 반대로 비활성화 시 ExecuteEnable 필드가 1로 세팅됨. DEP 구성이 프로세스에 의해 동적으로 변경될 수 없는 구성인 경우 Permanent 필드가 1로 세팅됨. Process Explorer의 DEP 프로세스 상태에 의하면 ‘DEP(permanent)’는 모듈이 시스템 바이너리라 DEP가 활성화된 경우, ‘DEP’는 DEP가 현재 정책 또는 opted in으로 인해 활성된 경우, ‘Empty’는 현재 정책 또는 opted out으로 인해 비활성화된 경우)
 
-##### 주소 공간 레이아웃 랜덤화(ASLR)
+##### <ins>주소 공간 레이아웃 랜덤화(ASLR)</ins>
 ASLR과 DEP는 사용될 때 가장 효과적
 
-##### /GS 컴파일러 옵션
+##### <ins>/GS 컴파일러 옵션</ins>
 /GS 컴파일러 옵션은 software-enforced DEP로 여겨질 수 있음. security cookie라는 특별한 값을 스택 프레임에 추가해 버퍼 오버플로를 방지. 만약 함수 반환 전의 스택 검사 시 security cookie가 변경되었다면 프로그램 제어는 sechook.c에 정의된 특수한 루틴들로 옮겨갈 것. 대부분의 구현은 루틴의 프롤로그와 에필로그에서 이루어짐. 스택 프레임 셋업 후 할당되는 추가 공간들은 인자 및 지역 변수들을 스택상의 함수 버퍼 아래(below, 낮은 주소값)로 복사될 수 있게 함으로써 버퍼 오버플로 발생 시 조작으로부터 그것들을 보호할 수 있음. 이러한 행위를 variable reordering이라 하며 컴파일러는 이러한 변수 복사들을 tv(temporary variables) 접두어로 나타냄. 공간들이 할당된 후 쿠키값은 스택 프레임 포인터(EBP) 값과 XOR 연산을 거치고 스택의 __$ArrayPad$로 이름 붙여진 지역 변수에 저장됨. __$ArrayPad$ 값은 프레임 내에서 지역 변수로 존재하는 버퍼보다 높은 주소에 위치하므로 오버플로 시 덮어써지게 될 것. 루틴 종료 시, 쿠키값을 대상으로 __security_check_cookie 루틴이 호출되어 쿠키값이 오버플로에 의해 변경되진 않았는지 점검 수행. 만약 변경되었다면 __security_error_handler()를 단계적으로 호출하는, report_failure() 함수 호출. 일반적으로 Visual Studio 컴파일러는 스택 프레임 보호가 필요한 루틴을 결정하는데 heuristic한 알고리즘을 사용하나, strict_gs_check pragma를 사용해 컴파일러가 로컬 변수를 조작하는 모든 루틴에 GS 쿠키를 삽입하도록 할 수 있음
 
-##### /SAFESEH 링커 옵션 
+##### <ins>/SAFESEH 링커 옵션</ins>
 만약 /SAFESEH 옵션이 IA-32 시스템에서 명시된다면 링커는 바이너리의 헤더에 모듈의 유효한 예외 핸들러의 목록을 갖는 특수한 테이블을 삽입. 실행 중에 예외 발생 시, 예외 처리에 책임이 있는 ntdll.dll 내의 코드는 현재 스택에 위치한 예외 핸들러 레코드가 테이블에 명시된 핸들러 중 하나인지를 확인할 것
 
 #### *Native API*
 전통적으로 UNIX와 같은 OS는 항상 명확하게 정의된 well-documented system call 셋을 포함해왔음. 반면 윈도우의 경우 Native API라는 system call 인터페이스를 가지며 Windows API 뒤에 그것들을 감추어왔음. 이러한 방식 덕분에 만약 system call 인터페이스 업데이트를 포함하는 시스템 패치가 이루어지더라도 개발자는 이에서 소외되지 않을 수 있는데, 그들의 코드는 Windows API에 의존하고 있기 때문
 
-##### The IVT Grows Up
+##### <ins>The IVT Grows Up</ins>
 MS-DOS 같은 real-mode OS에서 IVT는 가장 주된 시스템 레벨 구조체였으며 커널로 통하는 정식 입구였음. 모든 DOS system call은 소프트웨어로부터 발생한 인터럽트에 의해 호출될 수 있었음(함수 코드가 AH 레지스터에 놓인 상황에서의 INT 0x21 명령어를 통해). 그러나 IVT가 IDT로 재탄생하며, 중심적인 커널 입구 구조체로서의 기능을 잃게 되었음
 
-##### IDT 세부 사항
+##### <ins>IDT 세부 사항</ins>
 윈도우 시작 시, 구동되는 프로세서의 종류를 검사하고 system call 호출들을 그에 맞게 조정(펜티엄 II 이전 프로세서의 경우 INT 0x2E 명령어가 system call에 사용되고, IA-32 프로세서의 경우 SYSENTER 명령어를 사용하여 IDT를 커널 영역으로의 점프의 의무에서 해방). 가장 현대의 윈도우 구성은 하드웨어 발생 신호를 처리하고 프로세서 예외에 응답하는 데만 IDT를 사용. Intel의 스펙에 따르면 IDT는 최대 256개의 8바이트 descriptor를 유지할 수 있음(IDT의 베이스 주소와 크기는 IDTR, IDTL 레지스터를 덤프하여 알 수 있음). !idt 명령 사용 시, 콘솔로 스트림된 254개의 엔트리 중 1/4 이하가 의미 있는 루틴을 참조. 대다수의 엔트리가 KiUnexpectedInterrupt 루틴을 참조하고 있음. 이러한 KiUnexpectedInterrupt 루틴들은 메모리상에서 연속적으로 정렬되어 있으며 그들은 모두 KiEndUnexpectedRange 함수를 호출하는 것으로 끝이 남. 또한 이전의 프로세서들을 위한 커널 영역 점프 기능은 여전히 IDT 엔트리 0x2E에 상주하고 있음(KiSystemService. 내부적으로는 KiFastCallEntry의 중간 부분을 호출하고 있음). 이는 시스템 서비스 디스패처로, Native API 루틴의 주소를 지정하고 이를 호출하는데 그것에 상속된(유저모드로부터) 정보를 사용
 
-##### 인터럽트 기반 system call
+##### <ins>인터럽트 기반 system call</ins>
 INT 0x2E가 system call 호출에 사용될 때 system service number(또는 dispatch ID)가 EAX 레지스터에 세팅됨(real-mode를 연상). 또한 호출자의 인자 목록의 주소가 EDX 레지스터에 세팅되며 최종적으로 인터럽트가 이루어짐
 
-##### SYSENTER 명령어
+##### <ins>SYSENTER 명령어</ins>
 SYSENTER가 호출되기 전 3개의 64비트 machine-specific register(MSR)들이 입력되어 프로세서가 점프해야 할 목적지와 커널모드 스택의 위치를 알도록 해야 함(유저모드 스택의 정보를 복사해야 하는 경우에). 이러한 MSR들은 RDMSR과 WRMSR 명령어로 조작될 수 있음
 * IA32_SYSENTER_CS(주소값 0x174) : 커널모드 코드와 스택 segment selector 명시
 * IA32_SYSENTER_ESP(주소값 0x175) : 커널모드 스택 포인터의 위치를 명시
@@ -237,7 +237,7 @@ SYSENTER가 호출되기 전 3개의 64비트 machine-specific register(MSR)들�
 * IA32_SYSENTER_CS와 IA32_SYSENTER_EIP 레지스터 덤프 시 그들이 KiFastCallEntry 루틴을 명시하고 있음을 알 수 있음. IA32_SYSENTER_CS에 저장된 segment selector는 전체 주소 영역에 걸쳐 있는 Ring 0 코드 세그먼트와 연관되어 있음. 그리고 IA32_SYSENTER_EIP는 KiFastCallEntry 루틴의 완전한 32비트 선형 주소를 오프셋으로서 담고 있음
 * INT 0x2E의 경우와 마찬가지로, SYSENTER 명령어 실행 전에 system service number가 EAX 레지스터에 위치해 있어야 하며 EDX 레지스터는 호출자의 인자 목록을 가리키는 것이 됨
 
-##### 시스템 서비스 디스패치 테이블
+##### <ins>시스템 서비스 디스패치 테이블</ins>
 system service number는 32비트 값으로, 처음 12비트는 어떤 시스템 서비스가 최종적으로 호출될 것인지를, Bits 12, 13은 4개의 가능한 service descriptor table 중 하나를 명시. 비록 4개의 descriptor table이 가능하지만 커널 영역 내에서 가시적인 심볼을 갖는 테이블은 KeServiceDescriptorTable(Ntoskrnl.exe에 의해 익스포트됨)과 KeServiceDescriptorTableShadow(익스큐티브 경계 내에서만 보여짐)뿐. Bits 12, 13이 00이라면(system service number는 0x0000 ~ 0x0FFF에 걸쳐 있음) KeServiceDescriptorTable이 사용되며, 만약 bits 12, 13이 01이라면(system service number는 0x1000 ~ 0x1FFF에 걸쳐 있음) KeServiceDescriptorTableShadow가 사용됨(0x2000 ~ 0x2FFF, 0x3000 ~ 0x3FFF는 service descriptor table을 위해 할당된 것으로 보이지 않음). 두 service descriptor table은 시스템 서비스 테이블(SST)이라는 하위 구조체들을 포함하고 있음. SST는 다음의 4개의 필드로 이루어진 구조체
 
 * serviceTable : 선형 주소들로 이루어진 배열의 첫 요소의 포인터를 담고 있는데 선형 주소들은 커널 영역 내 루틴의 EP들이며, 이러한 선형 주소들을 담고 있는 배열을 시스템 서비스 디스패치 테이블(SSDT)이라 부름. SSDT는 정신적으로 real-mode의 IVT와 같음

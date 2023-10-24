@@ -496,12 +496,12 @@ IMAGE_IMPORT_DESCRIPTOR의 Name 멤버의 RVA 값은 Header 영역에 속하며,
 
 ```
 [EP Code]
-  [Decoding Code]
-    XOR [B] with 44         
-    XOR [A] with 7
-    XOR [B] with 11
-    [A]
-      Checksum [B]
-      XOR [C] with 17
-      JMP OEP
+    [Decoding Code]
+        XOR [B] with 44         
+        XOR [A] with 7
+        XOR [B] with 11
+        [A]
+            Checksum [B]
+            XOR [C] with 17
+            JMP OEP
 ```

@@ -813,3 +813,138 @@ SetWindowsHookEx() API 함수를 이용하여 메시지 훅을 설치하면, OS�
 
 ## DLL 이젝션
 프로세스에 강제로 삽입한 DLL을 빼내는 기법. 대상 프로세스로 하여금 FreeLibrary() API를 호출하도록 만드는 것
+* Windows Kernel Object에게는 ‘참조 카운트’가 있는데, LoadLibrary()는 참조 카운트를 1 증가시키고, FreeLibrary()는 참조 카운트를 1 감소시킴
+
+<br/>
+
+### 예시 #8: EjectDll.cpp
+
+```cpp
+#include “windows.h”
+// 프로세스 리스트와 모듈 리스트를 구하는 데 사용.
+// CreateToolhelp32Snapshot으로 프로세스 리스트에 대한 핸들을 얻어온 뒤,
+// Process32First, Process32 Next로 프로세스 리스트를 조사할 수 있음.
+// 또한 Module32First, Module32Next로 모듈 리스트 역시 조사 가능
+#include ”tlhelp32.h”
+#include ”tchar.h”
+#define DEF_PROC_NAME (L”notepad.exe”)
+#define DEF_DLL_NAME (L”myhack.dll”)
+DWORD FindProcessID(LPCTSTR szProcessName)
+{
+    DWORD dwPID = 0xFFFFFFFF;
+    HANDLE hSnapShot = INVALID_HANDLE_VALUE;
+    // Process32First() 함수의 인자로 전달되어, 프로세스의 정보를 입력받음
+    PROCESSENTRY32 pe;
+    pe.dwSize = sizeof(PROCESSENTRY32);
+    hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, NULL);
+    // 스냅샷을 찍는 순간의 프로세스 리스트를 가져옴
+    Process32First(hSnapShot, &pe);
+    do
+    {
+        if(!_tcsicmp(szProcessName, (LPCTSTR)pe.szExeFile))
+        {
+            dwPID = pe.th32ProcessID;
+            break;
+        }
+    } while(Process32Next(hSnapShot, &pe)); // 실패 시 0 반환
+    CloseHandle(hSnapShot);
+    return dwPID;
+}
+// 흔히 프로세스의 권한을 얻기 위해 OpenProcess 함수에서 PROCESS_ALL_ACCESS를 사용.
+// 그러나 현재 자신의 권한이 낮아서 프로세스 핸들을 열지 못하는 경우가 종종 있음.
+// 이 경우 다음과 같은 함수들을 이용하여 자신의 권한을 높일 수 있음
+// (스냅샷 등으로 오류 없이 핸들을 가져오기 위한 필수 과정)
+BOOL SetPrivilege(LPCTSTR lpszPrivilege, BOOL bEnablePrivilege)
+{
+    // 접근 토큰(Access token. 로그온 수행 시 필요한 보안정보가 들어있는 객체.
+    // 로그온할 때 만들어지며, 프로세스마다 하나의 토큰 사본이 필요한 것으로
+    // 사용자의 권한을 식별하는 데 사용)의 권한 정보를 담는 구조체
+    TOKEN_PRIVILEGES tp;
+    HANDLE hToken;
+    // 로컬 단일 식별자. 시스템 시동 시 운영 체제에 부여되는 유일한 식별자
+    LUID luid;
+    if(!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PREVILEGES | TOKEN_QUERY, &hToken))
+    {
+        _tprintf(L”OpenProcessToken error : %u\n”, GetLastError());
+        return FALSE;
+    }
+    // 로컬로 지정된 privilege name을 나타내기 위해 시스템에서 사용되는 LUID 검색
+    if(!LookupPrivilegeValue(NULL, lpszPrivilege, &luid))
+    {
+        _tprintf(L”LookupPrivilegeValue error : %u\n”, GetLastError());
+        return FALSE;
+    }
+    // Privileges 배열(LUID_AND_ATTRIBUTES 구조체로 이루어짐)의 크기
+    tp.PrivilegeCount = 1;
+    tp.Privileges[0].Luid = luid;
+    if(bEnablePrivilege)
+        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    else
+        tp.Privileges[0].Attributes = 0;
+    if(!AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), (PTOKEN_PRIVILEGES)NULL, (PDWORD)NULL))
+    {
+        _tprintf(L”AdjustTokenPrivileges error : %u\n”, GetLastError());
+        return FALSE;
+    }
+    if(GetLastError() == ERROR_NOT_ALL_ASSIGNED)
+    {
+        _tprintf(L”The token does not have the specified privilege.\n”);
+        return FALSE;
+    }
+    return TRUE;}BOOL EjectDll(DWORD dwPID, LPCTSTR szDllName){
+    BOOL bMore = FALSE, bFound = FALSE;
+    HANDLE hSnapShot, hProcess, hThread;
+    HMODULE hModule = NULL;
+    // Module32First() 함수의 인자로 전달되어 모듈의 정보를 입력받음
+    MODULEENTRY32 me = {sizeof(me)};
+    LPTHREAD_START_ROUTINE pThreadProc;
+    // PID로 지정한 프로세스의 모듈 정보를 스냅샷
+    hSnapShot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, dwPID);
+    bMore = Module32First(hSnapShot, &me);
+    // 더 이상 탐색할 모듈이 없을 때 반복구문 탈출
+    for(; bMore; bMore = Module32Next(hSnapShot, &me))
+    {
+        if(!_tcsicmp((LPCTSTR)me.szModule, szDllName) || !_tcsicmp((LPCTSTR)me.szExePath, szDllName))
+        {
+            bFound = TRUE;
+            break;
+        }
+    }
+    if(!bFound)
+    {
+        CloseHandle(hSnapShot);
+        return FALSE;
+    }
+    if(!(hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, dwPID)))
+    {
+        _tprintf(L”OpenProcess(%d) failed!!! [%d]\n”, dwPID, GetLastError());
+        return FALSE;
+    }
+    hModule = GetModuleHandle(L”kernel32.dll”);
+    pThreadProc = (LPTHREAD_START_ROUTINE)GetProcAddress(hModule, ”FreeLibrary”);
+    hThread = CreateRemoteThread(hProcess, NULL, 0, pThreadProc, me.modBaseAddr, 0, NULL);
+    WaitForSingleObject(hThread, INFINITE);
+    CloseHandle(hThread);
+    CloseHandle(hProcess);
+    CloseHandle(hSnapShot);
+    return TRUE;
+}
+int _tmain(int argc, TCHAR* argv[])
+{
+    DWORD dwPID = 0xFFFFFFFF;
+    dwPID = FindProcessID(DEF_PROC_NAME);
+    if(dwPID == 0xFFFFFFFF)
+    {
+        _tprintf(L”There is no %s process!\n”, DEF_PROC_NAME);
+        return 1;
+    }
+    _tprintf(L”PID of \”%s\” is %d\n”, DEF_PROC_NAME, dwPID);
+    if(!SetPrivilege(SE_DEBUG_NAME, TRUE))
+        return 1;
+    if(EjectDll(dwPID, DEF_DLL_NAME))
+        _tprintf(L”EjectDll(%d, \”%s\”) success!!!\n”, dwPID, DEF_DLL_NAME);
+    else
+        _tprintf(L”EjectDll(%d, \”%s\”) failed!!!\n”, dwPID, DEF_DLL_NAME);
+    return 0;
+}
+```

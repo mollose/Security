@@ -1238,3 +1238,390 @@ API 후킹을 위해 어느 부분을 공략해야 하는지에 대한 내용
 6) 해당 API 실행(0xCC가 제거된 정상적인 상태)
 7) 훅 : 다시 첫 바이트를 0xCC로 변경(지속적인 후킹을 위해)
 8) 디버기에게 제어를 되돌려 줌
+
+<br/>
+
+### 동작 원리
+notepad에서 입력 내용을 파일로 저장하기 위해 kernel32!WriteFile() API를 사용할 것이라 가정
+* 실행 흐름 : WriteFile() API 시작 주소에 BP(INT 3)를 설치하면, 디버기에서 파일을 저장할 때 디버거에게 EXCEPTION_BREAKPOINT 이벤트가 전달되고, 이 순간의 디버기의 EIP 값은 WriteFile() API 시작 주소 + 1. 그 후에 제어가 디버거에게 넘어오면 쓰기 버퍼의 내용을 수정해서 덮어쓴 다음 EIP를 WriteFile() API 시작 주소로 되돌려서 실행(무한 루프에 빠지지 않게 0xCC를 original byte로 복구해야 함(언훅))
+
+<br/>
+
+### 예시 #12: DebugLoop()
+디버기로부터 오는 디버그 이벤트를 처리
+
+```cpp
+// 디버거 루프로 들어가기 전, DebugActiveProcess() API에
+// PID를 파라미터로 넘겨준 뒤 호출함으로써 프로세스에 Attach해야 함
+void DebugLoop()
+{
+    DEBUG_EVENT de;
+    DWORD dwContinueStatus;
+    // 디버기로부터 디버그 이벤트를 전달받을 때까지 기다리는 함수
+    // (이벤트 발생 시 1을 리턴하고, 이벤트 발생 시점의 프로세스 정보 저장)
+    while(WaitForDebugEvent(&de, INFINITE))
+    {
+        dwContinueStatus = DBG_CONTINUE;
+        if(CREATE_PROCESS_DEBUG_EVENT == de.dwDebugEventCode)
+            OnCreateProcessDebugEvent(&de);
+        else if(EXCEPTION_DEBUG_EVENT == de.dwDebugEventCode)
+            if(OnExceptionDebugEvent(&de))
+                continue; // 예외처리 이후 다시 이벤트 대기 상태로 돌려보냄
+        else if(EXIT_PROCESS_DEBUG_EVENT == de.dwDebugEventCode)
+            break;
+        // 세 번째 파라미터 : DBG_CONTINUE(정상적으로 처리된 경우),
+        // DBG_EXCEPTION_NOT_HANDLED(처리 불가, SEH에서 처리하길 원할 때)
+        ContinueDebugEvent(de.dwProcessId, de.dwThreadId, dwContinueStatus);
+    }
+}
+```
+
+* DEBUG_EVENT 구조체는 각 디버그 이벤트(9가지)에 따라 dwDebugEventCode 멤버와 u 공용체 멤버(이벤트 종류 개수에 맞춰 9가지 구조체를 지님)가 세팅된다는 특성
+
+<br/>
+
+### 예시 #13: OnCreateProcessDebugEvent()
+```cpp
+BOOL OnCreateProcessDebugEvent(LPDEBUG_EVENT pde)
+{
+    g_pfWriteFile = GetProcAddreess(GetModuleHandle(“kernel32.dll“), “WriteFile“);
+    // 이벤트 발생 시점의 CREATE_PROCESS_DEBUG_INFO를 가져옴
+    memcpy(&g_cpdi, &pde->u.CreateProcessInfo, sizeof(CREATE_PROCESS_DEBUG_INFO));
+    ReadProcessMemory(g_cpdi.hProcess, g_pfWriteFile, &g_chOrgByte, sizeof(BYTE), NULL);
+    WriteProcessMemory(g_cpdi.hProcess, g_pfWriteFile, &g_chINT3, sizeof(BYTE), NULL);
+    return TRUE;
+}
+```
+
+<br/>
+
+### 예시 #14: OnExceptionDebugEvent()
+```cpp
+BOOL OnExceptionDebugEvent(LPDEBUG_EVENT pde)
+{
+    // 모든 프로그램은 프로세스 단위로 실행되고, 프로세스의 실제 명령어는 스레드 단위로 실행됨.
+    // Windows OS는 멀티 스레드 기반이므로 하나의 프로세스에서 여러 스레드가 동시에 실행될 수 있음(CPU 자원을 시분할).
+    // CPU가 하나의 스레드를 실행하다가 다른 스레드를 실행하고자 할 때 기존 스레드의 레지스터 정보를 한 곳에 저장해두는데,
+    // 바로 CONTEXT 구조체에 그 정보를 저장
+    CONTEXT ctx;
+    PBYTE lpBuffer = NULL;
+    DWORD dwNumOfBytesToWrite, dwAddrOfBuffer, i;
+    PEXCEPTION_RECORD per = &pde->uException.ExceptionRecord;
+    if(EXCEPTION_BREAKPOINT == per->ExceptionCode)
+    {
+        if(g_pfWriteFile == per->ExceptionAddress)
+        {
+            WriteProcessMemory(g_cpdi.hProcess, g_pfWriteFile, &g_chOrgByte, sizeof(BYTE), NULL);
+            ctx.ContextFlags = CONTEXT_CONTROL;
+            GetThreadContext(g_cpdi.hThread, &ctx);
+            ReadProcessMemory(g_cpdi.hProcess, (LPVOID)(ctx.Esp + 0x8), &dwAddrOfBuffer, sizeof(DWORD), NULL);
+            ReadProcessMemory(g_cpdi.hProcess, (LPVOID)(ctx.Esp + 0xC), &dwNumOfBytesToWrite, sizeof(DWORD), NULL);
+            lpBuffer = (PBYTE)malloc(dwNumOfBytesToWrite +1);
+            memset(lpBuffer, 0, dwNumOfBytesToWrite + 1);
+            ReadProcessMemory(g_cpdi.hProcess, (LPVOID)dwAddrOfBuffer, lpBuffer, dwNumOfBytesToWrite, NULL);
+            printf(“\n### original string : %s\n“, lpBuffer);
+            for(i = 0; i < dwNumOfBytesToWrite; i++)
+                if(0x61 <= lpBuffer[i] && lpBuffer[i] <= 0x7A)
+                    lpBuffer[i] -= 0x20;
+            printf(“\n### converted string : %s\n“, lpBuffer);
+            WriteProcessMemory(g_cpdi.hProcess, (LPVOID)dwAddrOfBuffer, lpBuffer, dwNumOfBytesToWrite, NULL);
+            free(lpBuffer);
+            etx.Eip = (DWORD)g_pfWriteFile;
+            SetThreadContext(g_cpdi.hThread, &ctx);
+            // 디버기 프로세스 실행 재개
+            ContinueDebugEvent(pde->dwProcessId, pde->dwThreadId, DBG_CONTINUE);
+            // Sleep(0) 호출 시 CPU는 즉시 다른 스레드를 실행. 자연스럽게 디버기 프로세스의 메인 스레드도 실행되며,
+            // WriteFile() API 함수가 정상적으로 호출됨. 일정 시간이 지나면 다시 HookDbg.exe에 제어가 돌아오면서
+            // Sleep(0) 아래의 Hook 코드가 호출됨. Sleep(0)이 없다면 WriteFile() 함수 실행 도중에
+            // Hook 코드에 의해 시작 바이트가 변경될 수 있음
+            Sleep(0);
+            WriteProcessMemory // 다음번 후킹을 위해 다시 API 훅을 설치
+                (g_cpdi.hProcess, g_pfWriteFile, &g_chINT3, sizeof(BYTE), NULL);
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+```
+
+* Windows XP 이상부터는 DebugSetProcessKillOnExit()을 호출하여 디버거가 종료(Detach)되는 순간에 디버기가 종료되지 않도록 할 수 있으나, 디버거 종료 전에 언훅을 해주어야 한다는 점에 유의해야 함
+
+<br/><br/>
+
+## 예제 #9: 계산기, 한글을 배우다
+프로세스에 인젝션된 DLL 파일이 IAT를 후킹하게 함으로써 특정 API의 기능 변경 가능
+
+<br/>
+
+### 작업 순서
+user32.SetWindowTextW() API 함수 주소를 후킹하여 계산 결과를 한글로 출력하도록 함
+1) 필요한 API의 호출을 위해 IAT 영역을 참조하는 CALL 명령 실행
+2) IAT에 기록되어 있는 API 주소가 사용자 함수의 시작 주소로 바뀌어 있으므로, hookiat.MySetWindowTextW()의 시작 위치로 이동
+3) MySetWindowTextW()의 작업을 마치고, 내부의 CALL 명령으로 hookiat.dll의 data 섹션을 참조하여, 원래 호출하려 했던 함수인 user32.SetWindowTextW()의 시작 주소로 이동
+4) user32.SetWindowTextW()가 종료되면, hookiat.dll의 CALL 명령어 다음으로 복귀
+5) 최종적으로 MySetWindowText()가 종료되면, calc.exe 코드 영역으로 복귀
+* 이러한 과정들을 위해서는, 대상 프로세스에 사용자 DLL을 인젝션하고, calc.exe 프로세스의 IAT 영역에서 4byte 크기의 주소값을 변경하는 작업이 필요
+
+<br/>
+
+### 예시 #15: hook_iat()
+
+```cpp
+BOOL hook_iat(LPCSTR szDllName, PROC pfnOrg, PROC pfnNew)
+{
+    HMODULE hMod;
+    LPCSTR szLibName;
+    PIMAGE_IMPORT_DESCRIPTOR pImportDesc;
+    PIMAGE_THUNK_DATA pThunk;
+    DWORD dwOldProtect, dwRVA;
+    PBYTE pAddr;
+    hMod = GetModuleHandle(NULL);
+    pAddr = (PBYTE)hMod;
+    pAddr += *((DWORD*)&pAddr[0x3C]);
+    dwRVA = *((DWORD*)&pAddr[0x80]);
+    pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((DWORD)hMod + dwRVA);
+    for(; pImportDesc->Name; pImportDesc++)
+    {
+        szLibName = (LPCSTR)((DWORD)hMod + pImportDesc->Name);
+        if(!stricmp(szLibName, szDllName))
+        {
+            pThunk = (PIMAGE_THUNK_DATA)((DWORD)hMod + pImportDesc->FirstThunk);
+            for(; pThunk->u1.Function; pThunk++)
+            {
+                if(pThunk->u1.Function == (DWORD)pfnOrg)
+                {
+                    VirtualProtect((LPVOID)&pThunk->u1.Function, 4, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+                    pThunk->u1.Function = (DWORD)pfnNew;
+                    VirtualProtect((LPVOID)&pThunk->u1.Function, 4, dwOldProtect, &dwOldProtect);
+                    return TRUE;
+                }
+            }
+        }
+    }
+    return FALSE;
+} 
+```
+
+* DllMain() 디버깅 중, hook_iat() 함수 호출부분을 보면 첫 번째 파라미터인 ”user32.dll“ 문자열 주소가 생략된 것을 알 수 있음. 이는 컴파일러 코드 최적화 기능이 적용되어서 문자열 주소(4byte 상수)를 함수 파라미터로 넘기지 않고 hook_iat() 함수 내에 하드코딩하였기 때문
+
+<br/><br/>
+
+## 예제 #10: ‘스텔스’ 프로세스
+API 코드 패치 및 글로벌 후킹(Global hooking)
+
+<br/>
+
+### 작업 순서
+프로세스 메모리에 로딩된 라이브러리 이미지에서 후킹을 원하는 API 코드 자체를 수정
+* IAT 후킹 기법은 후킹하려는 API가 프로세스의 IAT에 존재하지 않을 경우 후킹이 불가능한 반면, API 코드 패치 방법은 그러한 제약조건이 없음
+1) procexp.exe의 코드 영역에서 IAT를 참조하여 ntdll.ZwQuerySystemInformation() API 함수를 호출. 그러나 stealth.dll이 인젝션 되면서, ntdll.ZwQuerySystemInformation() API 함수 시작주소의 5byte 코드를 stealth.MyZwQuerySystemInformation() 함수로의 JMP 명령어로 바꾸어놓은 상태
+2) 패치된 코드에 의해 후킹 함수로 점프. 함수 내부의 CALL unhook() 명령어에 의해 ntdll.ZwQuerySystemInformation() API 함수 시작 5byte는 원래대로 복원됨
+3) CALL EAX 명령어에 의해 원본 함수가 호출됨(언훅 상태이므로 정상 실행)
+4) ntdll.ZwQuerySystemInformation()의 실행이 완료되면 stealth.dll 코드 영역으로 리턴. CALL hook() 명령어에 의해 원본 API를 다시 후킹
+5) stealth.MyZwQuerySystemInformation()의 실행이 완료되면, procexp.exe 코드 영역으로 복귀
+
+<br/>
+
+### 프로세스 은폐 
+특정 프로세스를 은폐시키기 위해서는, 다른 모든 프로세스의 메모리에 침투하여 프로세스의 탐색과 관련된 API를 후킹 해주어야 함
+* CrateToolhelp32Snapshot(), EnumProcesses() : 내부적으로 ntdll.ZwQuerySystemInformation() 함수 호출
+* ZwQuerySystemInformation() : 실행 중인 모든 프로세스의 정보를 구조체 연결 리스트 형태로 얻을 수 있음. 그 연결 리스트를 조작하면 원하는 프로세스 은폐 가능
+* 은폐 기법의 문제점 : 현재 실행 중인 모든 프로세스뿐만 아니라, 새로 생성되는 프로세스들까지도 후킹 해야만 원하는 프로세스가 은폐되었다고 확신 가능
+  * 시스템 전체에 걸쳐 후킹을 하는 ‘글로벌 후킹’ 기법을 사용할 필요
+ 
+<br/>
+
+### 예시 #16: HideProc.cpp
+* InjectAllProcess() : CreateToolhelp32Snapshot() 함수를 사용하여 실행 중인 모든 프로세스(시스템 안정성을 위해 PID가 100보다 작은 시스템 프로세스에 대해서는 DLL 인젝션을 수행하지 않음)를 검색한 뒤, 각각의 프로세스에 대해 DLL 인젝션 및 이젝션을 수행(미리 HideProc.exe 프로세스의 특권을 상승시켜 놓아야 전체 프로세스 리스트를 정확하게 얻을 수 있음(Visual Studio에서 Debug(F5) 시엔, 컴파일러 자체에서 Debug 특권을 상승시킨 뒤에 실행))
+
+<br/>
+
+### 예시 #17: stealth.cpp
+* SetProcName()
+
+```cpp
+// 공유 메모리 사용을 위한 섹션(섹션명 .SHARE) 설정
+#pragma comment(linker, “/SECTION:.SHARE, RWS“)
+// DLL의 데이터 공유 시작(초기화된 변수가 .obj 파일에 저장되는 데이터 세그먼트 지정)
+#pragma data_seg(“.SHARE“)
+    // g_szProcName 버퍼를 공유 메모리 섹션에 만들면, stealth.dl이 모든
+    // 프로세스에 인젝션 될 때 간단하게 은폐 프로세스 이름을 서로 공유 가능
+    TCHAR g_szProcName[MAX_PATH] = {0, };
+#pragma data_seg()
+#ifdef __cplusplus
+extern “C“{
+#endif
+__declspec(dllexport) void SetProcName(LPCTSTR szProcName)
+{
+    _tcscpy_s(g_szProcName, szProcName);
+}#ifdef __cplusplus
+}
+#endif
+```
+
+* DllMain() : 현재 프로세스가 HideProc.exe라면, 후킹하지 않고 종료(HideProc.exe는 DLL 인젝션을 위해 온전한 프로세스 리스트를 가져야 함)
+
+* hook_by_code()
+
+```cpp
+BOOL hook_by_code(LPCSTR szDllName, LPCSTR szFuncName, PROC pfnNew, PBYTE pOrgBytes)
+{
+    FARPROC pfnOrg;
+    DWORD dwOldProtect, dwAddress;
+    byte pBuf[5] = {0xE9, 0, };
+    PBYTE pByte;
+    pfnOrg = (FARPROC)GetProcAddress(GetModuleHandleA(szDllName), szFuncName);
+    pByte = (PBYTE)pfnOrg;
+    if(pByte[0] == 0xE9)
+        return FALSE;
+    VirtualProtect((LPVOID)pfnOrg, 5, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    memcpy(pOrgBytes, pfnOrg, 5);
+    // JMP 명령어의 Instruction은 “E9 XXXXXXXX“의 형태
+    // 이때, XXXXXXXX는 JMP 명령어부터 점프 위치까지의 상대거리
+    // (XXXXXXXX = 점프할 주소 – 현재 명령어 주소 – 현재 명령어 길이(5))
+    dwAddress = (DWORD)pfnNew - (DWORD)pfnOrg – 5;
+    memcpy(&pBuf[1], &dwAddress, 4);
+    memcpy(pfnOrg, pBuf, 5);
+    VirtualProtect((LPVOID)pfnOrg, 5, dwOldProtect, &dwOldProtect);
+    return TRUE;
+}
+```
+
+* unhook_by_code : 덮어쓴 5byte 위치의 메모리에 WRITE 속성을 추가한 뒤, pOrgBytes 매개변수로 전달된 원래 코드를 다시 덮어씀. 이후 메모리 속성 복원
+
+* NewZwQuerySystemInformation()
+
+```cpp
+// SYSTEM_INFORMATION_CLASS 자료형을 사용하기 위해서는, Winternl.h 헤더를 포함함으로써 내부 API 프로토타입을 노출시켜야 함
+// (Winternl.h에 정의된// 함수들은 직접 가져와 사용할 수 없으며, 런타임에 동적으로 링크하여 사용해야 함)
+NTSTATUS WINAPI NewZwQuerySystemInformation
+    (SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength)
+{
+    NTSTATUS status;
+    FARPROC pFunc;
+    PSYSTEM_PROCESS_INFORMATION pCur, pPrev;
+    char szProcName[MAX_PATH] = {0, };
+    unhook_by_code(DEF_NTDLL, DEF_ZWQUERYSYSTEMINFORMATION, g_pOrgBytes);
+    pFunc = GetProcAddress(GetModuleHandle(DEF_NTDLL), DEF_ZWQUERYSYSTEMINFORMATION);
+    // SystemInformationClass는 구조체 열거형으로 되어 있으며, 구조체의 종류에 따라 SystemInformation 위치에 저장되는 구조체가 달라짐.
+    status = ((PFZWQUERYSYSTEMINFORMATION)pFunc)(SystemInformationClass, SystemInformation, SystemInformationLength, ReturnLength);
+    if(status != STATUS_SUCCESS)
+        goto __NTQUERYSYSTEMINFORMATION_END;
+    if(SystemInformationClass == SystemProcessInformation)
+    {
+        pCur = (PSYSTEM_PROCESS_INFORMATION)SystemInformation;
+        while(TRUE)
+        {
+            if(pCur->Reserved2[1] != NULL)
+            {
+                if(!_tcsicmp(PWSTR)pCur->Reserved2[1], g_szProcName)
+                    if(pCur->NextEntryOffset == 0)
+                        pPrev->NextEntryOffset = 0;
+                    else
+                        pPrev->NextEntryOffset += pCur->NextEntryOffset;
+                else
+                    pPrev = pCur;
+            }
+            if(pCur->NextEntryOffset == 0)
+                break;
+            pCur = (PSYSTEM_PROCESS_INFORMATION)((ULONG)pCur + pCur->NextEntryOffset);
+        }
+    }
+__NTQUERYSYSTEMINFORMATION_END :
+    hook_by_code(DEF_NTDLL, DEF_ZWQUERYSYSTEMINFORMATION, (PROC)NewZwQuerySystemInformation, g_pOrgBytes);
+    return status;
+}
+```
+
+* ntdll.ZwQuerySystemInformation : SystemInformationClass 파라미터를 SystemProcessInformation(5)로 세팅하고 ZwQuerySystemInformation() API 함수를 호출하면, SystemInformation[inout] 파라미터에 SYSTEM_PROCESS_INFORMATION 구조체 단방향 연결 리스트의 시작 주소가 저장됨(실행 중인 프로세스의 모든 정보가 담겨있음)
+
+<br/>
+
+### 글로벌 API 후킹
+현재 실행 중인 프로세스와 앞으로 실행될 모든 프로세스에 대해 API 후킹
+
+#### <ins>Kernel32.CreateProcess() API 함수 후킹</ins>
+새로운 프로세스가 실행되려면 Kernel32.CreateProcess() API 함수를 사용해야 하는데, stealth.dll에서 CreateProcess() API 함수까지 같이 후킹 한다면, 이후 실행되는 프로세스에게도 자동으로 stealth.dll을 인젝션 하도록 만들 수 있음(모든 프로세스는 부모 프로세스에서 CreateProcess()를 호출하여 생성되기 때문에 부모 프로세스의 CreateProcess() API 함수를 후킹 함으로써 자식 프로세스들에게 stealth.dll 인젝션 가능)
+* CreateProcess() API 함수 후킹 시, kernel32.CreateProcessA()와 kernel32.CreateProcessW() 두 개의 API 함수를 모두 후킹 해주어야 함
+* CreateProcessA(), CreateProcessW()는 각각 내부적으로 CreateProcessInternalA(), CreateProcessInternalW()를 호출하는데, 일부 MS 제품 중에서 CreateProcessInternal() 함수들을 직접 호출하는 것들도 있으므로 이들을 후킹 한다면 더욱 정확한 글로벌 API 후킹이 가능
+* 후킹 함수(NewCreateProcess)는 원본 함수를 호출한 후 생성된 자식 프로세스에 대해 API 후킹을 시도하는 방식으로 작동하므로, 아주 짧은 순간동안 자식 프로세스가 후킹 되지 않은 상태로 실행될 수 있음
+  * kernel32.CreateProcess() 대신, Low Level API인 ntdll.ZwResumeThread() API 함수를 후킹함으로써 해결 가능
+
+#### <ins>Ntdll.ZwResumeThread() API 함수 후킹</ins>
+ZwResumeThread()는 프로세스 생성 이후 메인 스레드 실행 직전에 호출되는 함수로서, 이를 후킹하면 자식 프로세스의 코드가 하나도 실행되지 않은 상태에서 후킹 함수 실행 가능. undocumented API이므로 OS 패치 시 변경될 수 있다는 단점이 있음
+
+#### <ins>예시 #18: stealth2.cpp</ins>
+* DllMain()
+
+```cpp
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    char szCurProc[MAX_PATH] = {0, };
+    char* p = NULL;
+    GetModuleFileNameA(NULL, szCurProc, MAX_PATH);
+    p = strrchr(szCurProc, ‘\\‘);
+    if(p != NULL && !_stricmp(p + 1, “HideProc2.exe“))
+        return TRUE;
+    SetPrivilege(SE_DEBUG_NAME, TRUE);
+    switch(fdwReason)
+    {
+    case DLL_PROCESS_ATTACH :
+        hook_by_code(“kernel32.dll“, “CreateProcessA“, (PROC)NewCreateProcessA, g_pOrgCPA);
+        hook_by_code(“kernel32.dll“, “CreateProcessW“, (PROC)NewCreateProcessW, g_pOrgCPW);
+        hook_by_code(“ntdll.dll“, “ZwQuerySystemInformation“, (PROC)NewZwQuerySystemInformation, g_pOrgZwQSI);
+        break;
+    case DLL_PROCESS_DETACH :
+        unhook_by_code(“kernel32.dll“, “CreateProcessA“, g_pOrgCPA);
+        unhook_by_code(“kernel32.dll“, “CreateProcessW“, g_pOrgCPW);
+        unhook_by_code(“ntdll.dll“, “ZwQuerySystemInformation“, g_pOrgZwQSI);
+        break;
+    }
+    return TRUE;
+}
+```
+
+* NewCreateProcessA() : NewCreateProcessW()도 거의 동일
+
+```cpp
+BOOL WINAPI NewCreateProcessA(LPCTSTR lpApplicationName,
+    LPTSTR lpCommandlLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCTSTR lpCurrentDirectory,
+    LPSTARTUPINFO lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation)
+{
+    BOOL bRet;
+    FARPROC pFunc;
+    unhook_by_code(“kernel32.dll“, “CreateProcessA“, g_pOrgCPA);
+    pFunc = GetProcAddress(GetModuleHandleA(“kernel32.dll“), “CreateProcessA“);
+    bRet = ((PFCREATEPROCESSA)pFunc)(lpApplicationName, lpCommandLine, lpProcessAttributes, lpThreadAttributes,
+        bInheritHandles, dwCreationFlags, lpEnvironment, lpCurrentDirectory, lpStartupInfo, lpProcessInformation);
+    if(bRet)
+        InjectDll2(lpProcessInformation->hProcess, STR_MODULE_NAME);
+    hook_by_code(“kernel32.dll“, “CreateProcessA“, (PROC)NewCreateProcessA, g_pOrgCPA);
+    return bRet;
+}
+```
+
+* 실행 중인 모든 프로세스에서 공통적으로 인식할 수 있도록 %SYSTEM% 위치에서 DLL을 가져옴
+
+<br/>
+
+* 기존 API 코드 패치 방식의 문제점 : NewCreateProcessA()가 호출될 때마다 언훅과 훅이 계속 발생하여 성능 저하가 있을 뿐만 아니라, 멀티 스레딩 상황에서 한 스레드가 코드를 실행하려 할 때 다른 코드가 해당 코드에 쓰기 시도를 하는 경우, Run-Time Error 발생 가능
+
+<br/>
+
+### 핫 패치(핫 픽스. 7byte 코드 패치)
+Windows OS의 주요 라이브러리 API들은 일반적으로 ’MOV EDI, EDI‘ 명령으로 시작하며, 시작부분 바로 위에 5개의 ’NOP‘ 명령어가 존재하는데, 총 7byte의 아무런 의미가 없는 이러한 명령어들은 핫 패치를 위해 라이브러리 제작 시 포함되었음. 핫 패치란 프로세스가 실행 중인 상태에서 라이브러리를 프로세스 메모리에서 일시적으로 변경하는 기술
+1) API 시작 코드 위쪽의 5byte를 ’FAR JMP‘ 명령어(E9 XXXXXXXX. 프로세스 메모리의 유저 영역 어느 곳이라도 점프 가능)로 변경하여 사용자 후킹 함수로 점프하도록 만듦
+2) API 시작 코드 2byte를 ’SHORT JMP‘ 명령어(EB XX. 현재 EIP 기준, –128 ~ 127 범위 내 점프 가능)로 변경하여 바로 위의 ’FAR JMP‘ 명령어로 점프하도록 만듦
+* 핫 패치 기법을 이용한 API 후킹은 API 코드가 패치된 상태에서도 원본 API를 완벽하게 실행 가능(원본 함수 호출 시, 시작 주소의 JMP XX 2byte 명령어를 건너뛰고 그 다음부터 실행). 따라서 후킹 함수 내부에서 언훅과 훅 과정이 필요 없게 됨
+* ntdll.dll의 함수들과 같이 코드 길이가 짧은 API 함수는, 별도로 코드를 복사한 뒤 원본 API의 위치에 후킹 함수로의 5byte JMP 명령어를 덮어쓰고, 사용자 후킹 함수 내부에서 복사된 위치의 API 코드를 실행하는 방식도 사용 가능
+* kernel32.dll, user32.dll, gdi32.dll 등의 라이브러리 함수(kernel32.GetStartInfoA() 등 일부 함수 제외)들은 핫 패치 사용이 가능한 반면, ntdll.dll의 함수들은 핫 패치의 사용이 불가능
+
+<br/><br/>
+
+## API 후킹 방식 정리
+후킹 함수와 후킹으로 인해 실행되는 함수로 나뉨
+
+<br/>
+
+### Debug 기법(ex. 메모장 WriteFile() 후킹)

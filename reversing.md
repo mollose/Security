@@ -474,7 +474,7 @@ IMAGE_IMPORT_DESCRIPTOR의 Name 멤버의 RVA 값은 Header 영역에 속하며,
 <br/>
 
 <p align="center">
- <img src="https://github.com/mollose/Security/assets/57161613/6e9abfe1-4f64-4d45-81cb-1479903e92f3" width="700">
+ <img src="https://github.com/mollose/Security/assets/57161613/6e9abfe1-4f64-4d45-81cb-1479903e92f3" width="800">
 </p><br/>
 
 * 패치하고자 하는 코드가 암호화된 OEP 영역에 존재한다면, 위치를 알고 있다 하더라도 부호화 문제로 인해 단순한 방법으로는 패치할 수 없음

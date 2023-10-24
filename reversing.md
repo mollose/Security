@@ -1125,7 +1125,7 @@ typedef struct _THREAD_PARAM
 // OllyDbg에서 어셈블리 코드로 작성한 뒤 Copy-To file로 가져온 ThreadProc() 함수
 BYTE g_InjectionCode[] = {0x55, 0x8B, 0xEC, 0x8B, 0x75 … };
 /*
-55			PUSH EBP
+55		PUSH EBP
 8BEC		MOV EBP, ESP
 ; 파라미터로 전달된 THREAD_PARAM 구조체를 가져옴
 8B75 08		MOV ESI, DWORD PTR SS:[EBP + 8]

@@ -2,7 +2,8 @@
 
 ## 목차
 
-</br></br>
+</br>
+</br>
 
 ## Hardware Briefing
 프로세서에 의해 메모리가 논리적으로 구성되는데 있어 두 가지 scheme 존재

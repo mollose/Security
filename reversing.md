@@ -1554,7 +1554,7 @@ __NTQUERYSYSTEMINFORMATION_END :
 ZwResumeThread()는 프로세스 생성 이후 메인 스레드 실행 직전에 호출되는 함수로서, 이를 후킹하면 자식 프로세스의 코드가 하나도 실행되지 않은 상태에서 후킹 함수 실행 가능. undocumented API이므로 OS 패치 시 변경될 수 있다는 단점이 있음
 
 #### <ins>예시 #18: stealth2.cpp</ins>
-* DllMain()
+##### DllMain()
 
 ```cpp
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
@@ -1583,7 +1583,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 }
 ```
 
-* NewCreateProcessA() : NewCreateProcessW()도 거의 동일
+##### NewCreateProcessA()
+NewCreateProcessW()도 거의 동일
 
 ```cpp
 BOOL WINAPI NewCreateProcessA(LPCTSTR lpApplicationName,

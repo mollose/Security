@@ -1066,3 +1066,100 @@ IDT 전체를 다른 넓은 위치로 옮긴 후 새로운 IID를 추가해야 �
 <p align="center">
  <img src="https://github.com/mollose/Security/assets/57161613/b9311f3e-710f-4765-9150-0d709888745b" width="500">
 </p><br/>
+
+* 인젝션 대상이 되는 target.exe 프로세스에 코드와 데이터를 삽입. 코드의 형식은 스레드 프로시저 형식으로, 코드에서 사용되는 데이터는 스레드의 파라미터로 전달
+
+<br/>
+
+* 코드 인젝션은 DLL 인젝션에 비해 고려해야 할 사항이 더 많으나, 메모리를 조금만 차지하고 흔적을 쉽게 남기지 않으며, 별도의 DLL 파일이 필요 없다는 장점이 있음
+
+<br/>
+
+### 예시 #10: ThreadProc()
+```cpp
+typedef struct _THREAD_PARAM
+{
+    FARPROC pFunc[2]; // FARPROC : typedef int(FAR WINAPI* FARPROC)();
+    char szBuf[4][128];
+} THREAD_PARAM, *PTHREAD_PARAM;
+typedef HMODULE(WINAPI* PFLOADLIBRARYA)(LPCSTR lpLibFileName);
+typedef FARPROC(WINAPI* PFGETPROCADDRESS)(HMODULE hModule, LPCSTR lpProcName);
+typedef int(WINAPI* PFMESSAGEBOXA)(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType);
+DWORD WINAPI ThreadProc(LPVOID lParam)
+{
+    PTHREAD_PARAM pParam = (PTHREAD_PARAM)lParam;
+    HMODULE hMod = NULL;
+    FARPROC pFunc = NULL;
+    hMod = ((PFLOADLIBRARYA)pParam->pFunc[0])(pParam->szBuf[0]);
+    pFunc = (FARPROC)((PFGETPROCADDRESS)pParam->pFunc[1])(hMod, pParam->szBuf[1]);
+    ((PFMESSAGEBOXA)pFunc)(NULL, pParam->szBuf[2], pParam->szBuf[3], MB_OK);
+    return 0;
+}
+```
+
+* ThreadProc() 함수는 API를 직접 호출하지 않으며, 또한 문자열도 직접 정의해서 사용하지 않음. 전부 스레드 파라미터로 넘어온 THREAD_PARAM 구조체에서 가져다 사용하고 있는데, 그 이유는 일반적인 프로그램의 방식대로 MessageBoxA() 함수를 호출한다면 정상적으로 실행되지 않으며, 이는 코드에서 사용되는 데이터가 상대방 프로세스에 없기 때문이라는 것. 따라서 코드와 함께, 문자열과 API 함수의 주소를 같이 인젝션하여 참조가 정확히 이루어지도록 함
+* 디버거로 살펴볼 때, 모든 중요한 데이터는 스레드 파라미터인 lParam([EBP + 8])으로 받아서 사용한다는 것을 알 수 있으며, 일반 프로그램의, 하드코딩된 주소의 데이터를 직접 참조하는 방식과는 차이가 있음
+
+<br/>
+
+* 상대방 프로세스에 data와 code를 각각 메모리 할당하고 인젝션 하는데, 함수를 대상 프로세스 메모리에 써넣을 시 함수의 크기를 인자로 전달해야 함. 이 경우 인젝션할 함수 바로 다음에 오는 함수의 주소값에서 인젝션할 함수의 주소값을 빼줌으로써 함수의 크기를 구할 수 있음
+
+<br/>
+
+* ThreadProc 함수 데이터를 인젝션할 때, VirtualAllocEx() 함수의 flProtect 파라미터를 PAGE_EXECUTE_READWRITE로 설정. 해당 페이지는 읽고 쓰는 것 이외에도 실행까지 가능
+
+<br/><br/>
+
+## 어셈블리 언어를 이용한 Code 인젝션
+* OllyDbg의 New origin here은 단순히 EIP만 바꿔버리는 것이므로, 직접 디버깅을 해서 그 주소로 가는 것과는 다름. 따라서 레지스터와 스택의 내용은 바뀌지 않음
+
+<br/>
+
+### 예시 #11: CodeInjection2.cpp
+
+```cpp
+typedef struct _THREAD_PARAM
+{
+    FARPROC pFunc[2];
+} THREAD_PARAM, *PTHREAD_PARAM;
+// OllyDbg에서 어셈블리 코드로 작성한 뒤 Copy-To file로 가져온 ThreadProc() 함수
+BYTE g_InjectionCode[] = {0x55, 0x8B, 0xEC, 0x8B, 0x75 … };
+/*
+55			PUSH EBP
+8BEC		MOV EBP, ESP
+; 파라미터로 전달된 THREAD_PARAM 구조체를 가져옴
+8B75 08		MOV ESI, DWORD PTR SS:[EBP + 8]
+68 6C6C0000	PUSH 6C6C ; “\0\0ll“
+68 33322E64	PUSH 642E3233 ; “d.23“
+68 75736572	PUSH 72657375 ; “resu“
+54			PUSH ESP
+FF16		CALL DWORD PTR DS:[ESI] ; LoadLibraryA() 호출
+68 6F784100	PUSH 41786F ; “\0Axo“
+68 61676542	PUSH 42656761 ; “Bega“
+68 4D657373	PUSH 7373654D ; “sseM“
+54			PUSH ESP
+50			PUSH EAX
+FF56 04		CALL DWORD PTR DS:[ESI + 4] ; GetProcAddress() 호출
+6A 00		PUSH 0
+; 리턴 주소를 PUSH하고 해당 주소로 점프하는 CALL 명령어의 특성을 활용하여,
+; 함수 파라미터인 문자열 주소를 스택에 넣고 그 다음 코드 명령어로 이동
+E8 0C000000	CALL 0040103F
+ASCII		“ReverseCore“
+E8 14000000	CALL 00401058
+ASCII		“www.reversecore.com“
+6A 00		PUSH 0
+FFD0		CALL EAX ; MessageBoxA() 호출
+33C0		XOR EAX, EAX
+8BE5		MOV ESP, EBP
+5D			POP EBP
+C3			RETN
+*/
+BOOL InjectCode(DWORD dwPID)
+{
+    /* 생략 : pRemoteBuf[0] 할당 후 함수 포인터 파라미터 구조체를 써넣음 */
+    pRemoteBuf[1] = VirtualAllocEx(hProcess, NULL, sizeof(g_InjectionCode), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+    WriteProcessMemory(hProcess, pRemoteBuf[1], (LPVOID)&g_InjectionCode, sizeof(g_InjectionCode), NULL);
+    hThread = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)pRemoteBuf[1], pRemotrBuf[0], 0, NULL);
+    /* 생략 */
+}
+```

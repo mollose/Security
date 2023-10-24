@@ -37,9 +37,15 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 인터럽트의 각 특정 유형마다 그 유형의 인터럽트를 적절한 ISR과 연결시키는 정수 값이 할당됨. 인터럽트가 어떻게 처리될지의 방식은 real mode와 protected mode 각각 다름. real mode에서, 메모리의 첫 1KB(0x00000 ~ 0x003FF)는 interrupt vector table(IVT)이라는 데이터 구조체가 차지(protected mode의 interrupt descriptor table(IDT)과 동일한 역할). IVT와 IDT 모두 ISR의 메모리상 위치를 지정하는 interrupt descriptor 또는 interrupt vector들로 이루어져 있음. real mode에선 IVT는 각 ISR의 논리 주소를 연속적으로 저장해두고 있음. 각 interrupt vector는 interrupt type 0부터 256까지 순서대로 0x00000에서 시작하여 4바이트씩을 차지하고, 각 vector는 ISR의 effective address와 segment selector로 이루어짐(두 값 모두 주소의 낮은 바이트가 앞에 옴(little endian)). MS-DOS에선 BIOS가 interrupt 0 ~ 31을 사용하고 DOS가 32 ~ 63을 사용(DOS system call 인터페이스는 모두 근본적으로 interrupt들로 이뤄져 있음). 나머지(64 ~ 255)는 유저 정의 interrupt
 
 3가지 타입의 인터럽트가 존재
-* Hardware interrupt : 외부 디바이스에 의해 예상치 못하게 발생. CLI 명령어로 IF를 클리어함으로써 해제 가능한 maskable interrupt와 해제 불가능한 nonmaskable interrupt로 나뉨
-* Software interrupt : INT 명령어를 사용하는 프로그램에 의해 구현됨. INT 명령어는 interrupt vector를 지정하는 하나의 operand를 가짐. INT 명령어 실행 시 TF와 IF를 클리어함. FLAGS, CS, IP 레지스터를 순서대로 스택에 저장한 뒤, 인터럽트 벡터를 통해 ISR의 주소로 이동. IRET 명령어를 만날 때까지 ISR의 코드를 실행. **IRET은 스택에 저장된 값들을 다시 꺼낸 후** INT 명령 이후의 명령어들에 대해 실행 재개
-* Exception : 프로세서가 명령어 실행 도중 faults, traps, aborts 등의 에러를 감지했을 때 발생
+
+##### Hardware interrupt
+외부 디바이스에 의해 예상치 못하게 발생. CLI 명령어로 IF를 클리어함으로써 해제 가능한 maskable interrupt와 해제 불가능한 nonmaskable interrupt로 나뉨
+
+##### Software interrupt
+INT 명령어를 사용하는 프로그램에 의해 구현됨. INT 명령어는 interrupt vector를 지정하는 하나의 operand를 가짐. INT 명령어 실행 시 TF와 IF를 클리어함. FLAGS, CS, IP 레지스터를 순서대로 스택에 저장한 뒤, 인터럽트 벡터를 통해 ISR의 주소로 이동. IRET 명령어를 만날 때까지 ISR의 코드를 실행. **IRET은 스택에 저장된 값들을 다시 꺼낸 후** INT 명령 이후의 명령어들에 대해 실행 재개
+
+##### Exception
+프로세서가 명령어 실행 도중 faults, traps, aborts 등의 에러를 감지했을 때 발생
   * fault : fault 발생 시, 프로세서는 예외를 발생시킨 명령어 앞의 명령어 경계에서 예외를 보고. 따라서 프로그램의 상태는 예외 이전의 상태로 리셋될 수 있고 명령어 재실행 가능. divided by zero(0) 등이 fault에 해당
   * trap : 명령어 재실행 불가. 프로세서는 예외를 발생시킨 명령어 뒤의 경계에서 예외를 보고. breakpoint(3), overflow(4) 등이 fault에 해당
   * abort : abort 발생 시 프로그램은 실행을 재개할 수 없으며 그대로 중단    
@@ -68,3 +74,12 @@ IA-32 프로세서는 메모리 보호의 구현에 Segmentation과 Paging의 �
 #### Protected Mode 페이징
 페이징은 선택적이지만, 페이징이 사용되지 않는다면 선형 주소 공간이 직접적으로 물리 메모리와 연관되는 특성으로 인해 사용 가능한 메모리는 32비트 선형 주소에 따라 4GB로 한정. 페이징을 사용할 때 세그먼테이션으로 만들어진 선형 주소 공간은 고정 크기 저장소인 페이지(4KB, 2MB 또는 4MB)로 나뉨. 이러한 페이지들은 물리 메모리에 매핑되거나 디스크에 저장될 수 있음(만약 프로그램이 참조하는 바이트가 디스크에 저장되어 있는 페이지 내에 위치한다면, 프로세서는 페이지 폴트 예외를 발생시키고 이는 OS에게 물리 메모리로 해당 페이지를 로드할 것을 시그널). 페이지가 로드되는, 물리 메모리 내의 슬롯은 페이지 프레임으로 불림. 페이징 활성화 시 선형 주소는 세 개의 서브 필드를 갖는 구조를 갖게 됨. 최하위 12비트 필드만이 물리 메모리상의 바이트 오프셋을 나타내며, 나머지 두 개의 10비트 필드는 상대 위치를 나타내는 배열 지시자. bits 22 ~ 31의 세 번째 필드는 page directory로 불리는 배열의 엔트리를 명시. 이 엔트리는 page directory entry(PDE)로 불림. page directory의 첫 번째 바이트 물리 주소는 CR3 레지스터(Page Directory Base Register(PDBR))에 저장됨. 인덱스 필드의 10비트 크기로 인해 page directory는 최대 1,024개의 PDE를 저장 가능. 각 PDE는 page table로 불리는 두 번째 배열의 base 물리 주소를 담고 있음. bits 12 ~ 21의 두 번째 필드는 page table의 특정 엔트리(PTE) 명시. page table 역시 최대 1,024개의 PTE들을 담을 수 있음. 각 PTE들은 메모리 내 페이지의 첫 바이트 물리 메모리 주소를 담고 있음. bits 0 ~ 11의 첫 번째 필드는 PTE가 제공하는 물리 base 주소에 더해져 물리 메모리 내의 실제 바이트 주소를 나타냄(논리 주소의 10비트 필드들은 인덱스들을, 마지막 12비트 필드는 실제 바이트 오프셋을 담음)
 * PDE, PTE에서 보여지는 20비트 base 주소는 real mode와 같이, 암시적인 0들을 가정함으로써(ex. 0x12345의 경우 실제로 0x12345000) 32비트 주소로 보여질 수 있음. 이러한 주소값은 (암시적 0을 제외하고) page frame number(PFN)로 불리기도 함(페이지 프레임은 특정한 위치이고 페이지는 측정의 단위. PFN은 페이지 프레임에 대한 번호)
+
+#### 주소 확장 페이징
+PAE 페이징 활성화 시(CR4 레지스터의 PAE 플래그를 통해), 세그먼테이션 과정으로 생성된 선형 주소는 4개의 파트로 나뉨. PDE와 PTE 인덱스의 크기가 각각 한 비트 감소한 9비트가 되며 이로서 생겨난 2비트는 주소의 최상위에 위치하여 page directory pointer table(PDPT)의 4개의 엔트리(PDPTE) 중 하나를 가리키게 됨. PAE 페이징은 32비트 선형 주소를 52비트 물리 주소로 매핑(52개보다 적은 address line을 갖는 IA-32 프로세서의 경우 물리 주소 내 관련된 상위 비트들은 0으로 세팅됨). 모든 페이징 과정은 CR3 레지스터로부터 시작되는데 이때의 CR3 레지스터는 PDPT의 물리 base 주소(52비트가 아님) 명시
+
+#### Table 세부 사항
+PDE와 PTE는 모두 32비트 구조체(덕분에 page directory와 page table 모두 4KB 페이지 크기에 맞게 됨). 메모리 보호의 관점에선 U/S, W 플래그가 핵심적. U/S 플래그는 두 가지 페이지 privilege level(user, supervisor)을 정의. 만일 이 플래그가 클리어되면 해당 PDE / PTE 아래의 페이지들은 supervisor privilege를 갖게 됨. W 플래그의 경우 해당 페이지 또는 페이지 그룹(PDE의 경우)이 읽기 전용인지 혹은 쓰기가 가능한지를 나타냄. W 플래그 세팅 시 페이지 또는 페이지 그룹은 읽기와 쓰기 모두 가능. PAE 페이징 환경에서는 PDPTE, PDE, PTE 모두 64비트 크기를 가짐. 중요한 차이점은 base 물리 주소 필드의 크기가 프로세서가 갖는 address line의 개수에 따라 달라진다는 점
+
+#### 제어 레지스터 세부 사항 
+CR3 레지스터는 page directory의 첫 바이트 물리 주소를 가지며, 각 프로세스마다 고유의 CR3 복사값을 지님으로써 이 값을 커널이 갖는 스케줄링 context로 유지하고, 따라서 두 프로세스가 동일한 선형 주소를 갖더라도 서로 다른 물리 주소에 매핑되는 것이 가능해짐. 이것은 프로세스마다 고유의 page directory를 가진 결과. 이는 메모리 보호의 비교적 덜 분명하게 보이는 한 측면. 한편 CR0 레지스터 역시 주목할 만한데, CR0의 16번째 비트는 WP(Write Protection) 플래그. **WP 세팅 시 supervisor-level 코드가 읽기 전용 user-level 메모리 페이지 내에 쓰는 것을 허용하지 않음**. 이 메커니즘은 전통적으로 UNIX 시스템에서 사용되는 프로세스 생성의 copy-on-write 방식(forking과 같이)을 용이하게 하는 반면, 루트킷이 특정 시스템 데이터 구조체를 수정할 수 없다는 것을 의미하기에 위험할 수 있음

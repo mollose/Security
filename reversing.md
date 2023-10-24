@@ -54,3 +54,72 @@ EFLAGS(FLAGS 레지스터의 32bit 확장형으로, 연산 결과 및 시스템 
 * ZF(Zero Flag) : 연산 후 결과값이 0일 시 1로 세팅
 * OF(Overflow Flag) : 부호 있는 수의 오버플로 발생, 혹은 MSB 변경 시 1로 세팅
 * CF(Carry Flag) : 부호 없는 수의 오버플로 발생 시 1로 세팅
+
+<br/><br/>
+
+## 어셈블리 기본 명령어
+* PUSH, POP : 스택에 값을 넣거나 스택에 있는 값을 사용
+* MOV : 값을 넣는 역할(ex. MOV eax, 1(eax에 1을 집어넣음))
+* MOVZX(Move with Zero-Extend) : 소스 오퍼랜드를 도착점으로 복사 후, 그 값을 16bit 또는 32bit 확장
+* LEA : 값을 가져오는 MOV와 달리, 주소를 가져옴(ex. lea eax, dword ptr ds:[esi](esi의 주소값을 eax로 가져옴. ≠ mov eax, dword ptr ds:[esi](esi가 가리키는 값을 eax로 가져옴)))
+* ADD, SUB : src에서 dest로 값을 더하거나 빼는 명령
+* INT : 인터럽트(예기치 않은 일이 발생 시 작동 중지 예방)을 일으킴
+* CALL : 함수를 호출. CALL로 호출된 코드 안에서 RET을 만났을 때 해당 호출 번지의 다음 번지로 되돌아옴(명령어 실행 시 호출 번지의 다음 주소값을 스택에 PUSH)
+* INC, DEC : i++, i--와 대응
+* AND, OR, XOR : 비트 연산자. dest와 src를 동일한 오퍼랜드로 처리 가능
+* NOP : 아무 것도 하지 말라는 명령어(CPU 클럭만 소모)
+* TEST : 논리 비교. 두 operand 중에 하나가 0이면 ZF = 1로 세팅(‘AND’ 연산과 동일)
+* PUSHAD : EAX ~ EDI 레지스터 값들을 스택에 저장
+* SHL, SHR(Shift Left, Right) : Dest 피연산자를 Src 크기만큼 비트 시프트
+* SAL, SAR(Shift Arithmetic Left, Right) : 오퍼랜드만큼 비트 시프트. 최상위 비트는 유지하며, 최하위 비트는 0
+* ROL, ROR(Rotate Left, RIght) : 회전 명령어. 비트 시프트의 일종으로, 한쪽 끝에서 회전되어 나온 비트는 다른 쪽 끝에서 다시 나타남
+* XCHG(Exchange Data) : temp 변수 없이 데이터 교환이 가능
+* BSWAP(Byte Swap) : 엔디언 변환을 진행
+* LOOP(LOOPD) : ECX가 0이 될 때까지 정해진 레이블로 goto함
+* REP : REP 뒤에 오는 스트링 명령을 CX가 0이 될 때까지 반복
+* REPE(Repeat until Equal) : ZF가 0이거나 ECX가 0이 될 때까지 반복
+* REPNE(Repeat until Not Equal) : 보통 SCAS 명령어와 함께 쓰임. 지정된 데이터 타입별로 문자열을 구분하고, 한 번 구분할 때마다 ECX를 1 차감하는 방법으로 쓰임
+* SCAS(Scan String) : 보통 REPE, REPNE와 함께 쓰임. AL 또는 AX 레지스터와 메모리의 데이터를 비교하며, 같은 값이면 ZF를 1로 세팅
+* LODS(Load String) : SI의 내용을 AL 또는 AX로 로드
+* STOS(Store String) : AL 또는 AX를 ES:DI가 지시하는 메모리에 저장
+* MOVS(Move String) : ESI가 가리키고 있는 곳의 값을 EDI가 가리키는 곳으로 복사
+* CMP : 주어진 두 개의 operand 비교. SUB와는 달리 operand 값이 변경되지 않고, EFLAGS 레지스터만 변경됨. 두 operand 값이 동일할 때 ZF = 1로 세팅
+
+<br/>
+
+### JMP
+* JZ, JE(Jump if Equal) : 조건 분기. ZF = 1이면 점프
+* JNE, JNZ(Jump Not Zero) : 결과가 0이 아닐 때 점프
+* JLE(Jump if Less or Equal) : <=와 같은 의미를 지님
+* JA(Jump if Above) : CMP a, b에서 a가 클 때 점프
+* JB(Jump if Below) : CMP a, b에서 b가 클 때 점프
+
+<br/>
+
+### 바이트 오더링
+* 빅 엔디언 : 데이터 저장 시, 사람이 보는 방식과 동일하게 저장. 대형 유닉스 서버에 이용되는 RISC 계열 CPU, 네트워크 프로토콜 등에서 빅 엔디언이 사용됨
+* 리틀 엔디언 : 저장되는 바이트의 순서를 역순으로 배치하여 저장. 저장된 값의 하위 바이트만 사용할 때, 혹은 산술 연산 시 효율적. 인텔 계열 프로세서에서 사용됨
+* 배열의 경우 엔디언 형식과 상관없이 동일한 요소 순서를 지님
+
+<br/>
+
+### 스택
+프로세서에서, 함수 내 로컬 변수 임시저장. 함수 호출 시 파라미터 전달. 복귀주소 저장 시에 스택 메모리를 사용. 스택은 높은 주소(아래쪽)에서 낮은 주소(위쪽) 방향으로 값이 추가됨. 스택 포인터의 초기값은 스택 메모리 가장 아래쪽을 가리킴
+
+<br/>
+
+### 16진수 ⇔ 2진수 변환
+* 16진수(h) : 1, 2, 3, 4, 5, 6, 7, 8, 9, A, B, C, D, E, F
+* 2진수(b) : 0001, 0010, 0011, 0101, 0110, 0111, 1000, 1001, 1010, 1011, 1100, 1101, 1110, 1111
+
+<br/>
+
+### 예제 #1: abex’ crackme #1
+* MessageBoxA : 함수 내부에서 ESI = FFFFFFFF로 세팅(Win32 API 호출 시 특정 레지스터 값이 변경되는 경우가 있음. Win32 어셈블리 프로그래밍 시 주의 요망)
+* GetDriveTypeA : HDD 타입의 경우, 리턴값(EAX)은 3
+* 스택에 파라미터 전달 : 함수 호출 전 PUSH 명령어를 사용하여 필요한 파라미터를 역순으로 스택에 입력하면, 받는 쪽인 함수에서 올바른 순서로 꺼내어 사용
+
+<br/><br/>
+
+## 스택 프레임
+EBP(베이스 포인터) 레지스터를 사용하여 스택 내의 로컬 변수, 파라미터, 복귀 주소에 접근하는 기법

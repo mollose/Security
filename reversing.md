@@ -496,12 +496,38 @@ IMAGE_IMPORT_DESCRIPTOR의 Name 멤버의 RVA 값은 Header 영역에 속하며,
 
 ```
 [EP Code]
-    [Decoding Code]
-        XOR [B] with 44         
-        XOR [A] with 7
-        XOR [B] with 11
-        [A]
-            Checksum [B]
-            XOR [C] with 17
-            JMP OEP
+  [Decoding Code]
+    XOR [B] with 44         
+    XOR [A] with 7
+    XOR [B] with 11
+    [A]
+      Checksum [B]
+      XOR [C] with 17
+      JMP OEP
 ```
+
+* 패치 코드를 설치하는 위치
+  * 파일의 빈 영역에 설치. 패치 코드의 크기가 작은 경우 사용
+  * 마지막 섹션을 확장 후 설치
+  * 새로운 섹션을 추가한 후 설치
+* 일반적인 PE 파일의 코드 섹션은 쓰기 속성이 없는데, 패커, Cryptor 류의 파일들은 코드 섹션에 쓰기 속성이 존재(프로그램 내에서 복호화 작업을 수행하기 위해서는 반드시 섹션 헤더에 쓰기 속성을 추가하여 쓰기 권한을 얻어야 함)
+* 패치 코드 만들기
+
+```
+MOV ECX, 0C
+MOV ESI, unpackme.004012A8 ; ASCII “ReverseCore“
+MOV EDI, unpackme.00401123 ; ASCII “You must patch this NAG!!!“
+REP MOVS BYTE PTR ES:[EDI], BYTE PTR DS:[ESI]
+MOV ECX, 9
+MOV ESI, unpackme.004012B4 ; ASCII “Unpacked“
+MOV EDI, unpackme.0040110A ; ASCII “You must unpack me!!!“
+REP MOVS BYTE PTR ES:[EDI], BYTE PTR DS:[ESI]
+JMP unpackme.0040121E
+DB 00
+ASCII “ReverseCore“, 0
+ASCII “Unpacked“, 0
+```
+
+* 패치 코드 실행하기 : JMP OEP(40120E) ⇒ JMP ‘CodeCave’(401280). 그러나 명령어가 위치한 [A] 영역은 XOR 7로 암호화되어 있으므로, 이를 고려하여 Instruction 작성 시 XOR 명령을 수행한 후 사용하여야 함
+
+<br/><br/>

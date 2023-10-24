@@ -749,3 +749,67 @@ int _tmain(int argc, TCHAR* argv[]) // main 함수의 TCHAR형
     return 0;
 }
 ```
+
+* OpenProcess() : PROCESS_ALL_ACCESS 권한의 프로세스 핸들을 구함
+* VirtualAllocEx() : 상대방 프로세스 메모리 공간에 버퍼 할당. 할당된 버퍼 주소는 상대방 프로세스의 메모리 주소이며, 이곳에 로드할 DLL 파일의 경로를 써넣음으로써 대상 프로세스가 인젝션할 DLL의 경로를 알게 함
+* WriteProcessMemory() : 앞에서 할당받은 버퍼 주소에 DLL 경로 문자열을 써줌
+* LoadLibraryW() 주소 구하기 : Windows 운영 체제에서, kernel32.dll은 프로세스마다 같은 주소에 로드된다는 점 이용. InjectDll.exe 프로세스에 로드된 kernel32.dll의 주소를 그대로 사용
+* CreateRemoteThread() : 대상 프로세스에서 원격 스레드를 실행. 첫 번째 파라미터(hProcess)를 제외하곤 일반적인 CreateThread() 함수와 동일(일반적인 스레드 생성 함수에서 ThreadProc() 함수와 그 파라미터를 전달한다면, DLL 인젝션에서는 LoadLibrary() 함수와 라이브러리 경로 주소값을 파라미터로 전달)
+* GetModuleFileName() : 대상 프로세스가 자신일 때, 첫 번째 인자는 NULL
+
+<br/>
+
+### 레지스트리 이용(AppInit_DLLs) 방식 
+Windows 운영 체제에서 기본으로 제공하는 AppInit_DLLs 레지스트리 항목에 인젝션을 원하는 DLL 경로 문자열을 쓰고, LoadAppInit_DLLs 레지스트리 항목의 값을 1로 변경한 후 재부팅하면, 실행되는 모든 프로세스에 해당 DLL을 인젝션 해줌(User32.dll이 프로세스에 로드될 때, AppInit_DLLs 항목을 읽어서 값이 존재하면 LoadLibrary()를 이용하여 사용자 DLL을 로딩. 따라서user32.dll을 로드하는 프로세스에만 인젝션이 가능하다는 단점이 있음)
+
+#### <ins>예시 #7: myhack2.cpp</ins>
+
+```cpp
+#include “windows.h“
+#include “tchar.h“
+#define DEF_CMD L“C:\\Program Files\\Internet Explorer\\iexplore.exe“
+#define DEF_ADDR L“http://www.naver.com“
+#define DEF_DST_PROC L“notepad.exe“
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
+{
+    TCHAR szCmd[MAX_PATH] = {0, };
+    TCHAR szPath[MAX_PATH] = {0, };
+    TCHAR* p = NULL;
+    STARTUPINFO s = {0, }; // 프로세스 시작 설정
+    // 생성하는 프로세스의 정보를 얻기 위해 인자로 전달하는 구조체
+    PROCESS_INFORMATION pi = {0, };
+    si.cb = sizeof(STARTUPINFO);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    switch(fdwReason)
+    {
+    case DLL_PROCESS_ATTACH :
+        if(!GetModuleFileName(NULL, szPath, MAX_PATH))
+            break;
+        if(!(p = _tcsrchr(szPath, ’\\’)))
+            break;
+        if(_tcsicmp(p + 1, DEF_DST_PROC))
+            break;
+        wsprintf(szCmd, L“%s %s“, DEF_CMD, DEF_ADDR);
+        if(!CreateProcess(NULL, (LPTSTR)(LPCTSTR)szCmd, NULL, NULL, FALSE, NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &pi))
+            break;
+        if(pi.hProcess != NULL)
+            CloseHandle(pi.hProcess);
+        break;
+    }
+    return TRUE;
+}
+```
+
+* notepad 프로세스만을 대상으로 하므로, 코드 내에서 프로세스 모듈명을 비교
+* regedit.exe의 HKEY_LOCAL_MACHINE\SOFTWARE\MICROSOFT\Windows NT\Current Version\Windows에서, AppInit_DLLs 값을 myhack2.dll의 경로로, LoadAppInit_DLLs 값을 1로 변경한 뒤 시스템을 재부팅하면, 모든 프로세스에 DLL 인젝션 가능
+
+<br/>
+
+### 메시지 후킹(SetWindowsHookEx() API 함수) 방식
+SetWindowsHookEx() API 함수를 이용하여 메시지 훅을 설치하면, OS에서 hook procedure를 담고 있는 DLL을 (창을 가진) 프로세스에게 강제로 인젝션
+
+<br/><br/>
+
+## DLL 이젝션
+프로세스에 강제로 삽입한 DLL을 빼내는 기법. 대상 프로세스로 하여금 FreeLibrary() API를 호출하도록 만드는 것

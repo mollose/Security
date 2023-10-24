@@ -1656,4 +1656,14 @@ Windows OS의 주요 라이브러리 API들은 일반적으로 ’MOV EDI, EDI�
  <img src="https://github.com/mollose/Security/assets/57161613/9c8b8341-deb2-4854-bc27-513b58003320" width="700">
 </p><br/>
 
-<br/>
+<br/><br/>
+
+## 디버그 심볼(debug symbol)
+주어진 실행 가능한 모듈에서, 특정한 기계어에 의해 생성된 프로그래밍 언어 구조를 표현하는 정보. 가끔씩 심볼릭 정보는 모듈의 바이너리 파일 또는 나뉘어서 배포되는 파일과 함께 컴파일되거나, 컴파일 또는 링킹 시에 버려짐. 디버그 심볼이 바이너리 자체에 삽입되면 파일이 상당히 커질 수 있기에 현대의 컴파일러는 심볼릭 정보를 분리된 파일에 출력하는데, 마이크로소프트는 PDB라는 파일 포맷 사용
+* Symchk로 pdb 가져오기 : symchk는 WinDbg에 내장되어 있는 프로그램으로, 원하는 서버에서 심볼을 가져오는 기능을 제공(symchk.exe <pdb 받아올 원본 파일> /s <심볼 서버>)
+> symchk.exe %windir%\system32\jscript.dll /s http://msdl.microsoft.com/download/symbols
+* OllyDbg, Immunity Debugger 등에서 자체 옵션으로 심볼 서버 및 로컬 pdb 디렉터리를 지정 가능하며, 이를 이용해 디버거 내에서 원본 함수명 등의 정보를 확인할 수 있음
+
+<br/><br/>
+
+## 예제 #11: 고급 글로벌 API 후킹 – IE 접속 제어

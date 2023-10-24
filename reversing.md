@@ -533,3 +533,29 @@ ASCII “Unpacked“, 0
 * 패치 코드 실행하기 : JMP OEP(40120E) ⇒ JMP ‘CodeCave’(401280). 그러나 명령어가 위치한 [A] 영역은 XOR 7로 암호화되어 있으므로, 이를 고려하여 Instruction 작성 시 XOR 명령을 수행한 후 사용하여야 함
 
 <br/><br/>
+
+## Windows 메시지 후킹
+Windows는 Event Driven 방식으로 동작하는 GUI 제공. 이벤트 발생 시 OS는 미리 정의된 메시지를 해당 응용 프로그램으로 통보. 메시지 훅이란, 이런 메시지를 중간에서 엿보거나 가로채는 것
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/a8fb0b89-6798-4467-b78b-1b3067a40491" width="700">
+</p><br/>
+
+### 키보드 입력 메시지의 처리 과정
+1) 키보드 입력 발생 시 WM_KEYDOWN 메시지가 OS message queue에 추가
+2) OS는 어느 응용 프로그램에서 이벤트가 발생했는지 파악해서 OS message queue에서 메시지를 꺼내어 해당 응용 프로그램의 메시지 큐에 추가
+3) 응용 프로그램은 자신의 메시지 큐를 모니터링하고 있다가 WM_KEYDOWN의 추가를 확인하고 해당 event handler를 호출
+* 키보드 메시지 훅이 설치되었다면, OS 메시지 큐와 응용 프로그램 메시지 큐 사이에 설치된, 훅 체인에 있는 키보드 메시지 훅들이 응용 프로그램에 앞서서 해당 메시지를 볼 수 있음. 키보드 메시지 훅 함수 내에서는 메시지를 단순히 엿보는 것뿐만 아니라 메시지 자체의 변경도 가능하며, 메시지를 가로챔으로 아래로 내려 보내지 않게 할 수도 있음
+
+<br/>
+
+### SetWindowsHookEx()
+메시지 훅은 SetWindowsHookEx() API 함수로 구현 가능
+> HHOOK SetWindowsHookEx(int idHook, HOOKPROC lpfn, HINSTANCE hMod, DWORD dwThreadId);
+* idHook : hook type
+* lpfn : hook procedure
+* hMod : hook procedure가 속한 DLL 핸들
+* dwThreadId : hook을 걸고 싶은 thread의 ID(0을 주고 호출하면 글로벌 훅이 설치됨(모든 프로세스 영향))
+* SetWindowsHookEx()를 이용하여 훅을 설치해놓으면, 어떤 메시지가 발생했을 때 운영 체제가 hook procedure를 가진 DLL 파일을 프로세스에 강제로 인젝션하고, 등록된 hook procedure를 호출

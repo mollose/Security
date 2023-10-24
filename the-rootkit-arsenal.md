@@ -249,3 +249,42 @@ system service number는 32비트 값으로, 처음 12비트는 어떤 시스템
 <img src="https://github.com/mollose/Security/assets/57161613/c1e28417-3ab0-4662-88a1-55cf1759f406" width="800"><br/>
 
 * KeServiceDescriptorTable의 첫 16바이트는 윈도우 Native API를 위한 SSDT를 나타내는 SST(Windows 7의 경우 이는 401개의 루틴들로 구성(nEntries = 0x191)). KeServiceDescriptorTableShadow의 첫 32바이트는 두 개의 SST를 포함하고 있음. 첫 번째 SST는 KeServiceDescriptorTable의 SST의 복사본, 두 번째 SST는 Win32k.sys 커널모드 드라이버에 의해 구현된 USER와 GDI 루틴들을 위한 SSDT를 나타냄
+
+##### Native API 열거
+
+(dps KiServiceTable L191과 같이 Native API SSDT 덤프 가능) ntdll.dll에서 익스포트하는 1,981개의 루틴에 비해 Native API(NT*())의 401개 루틴의 수는 적음. 이유는, 나머지 Nt*() 루틴(ntdll.dll에 의해 익스포트되는)들은 온전히 유저 영역 내에서 구현되었기 때문
+
+##### Nt*() vs. Zw*() system call
+소수의 예외를 제외하고 각 Nt*() 함수는 그에 대응하는 Zw*() 함수를 가짐. 유저모드 프로그램 관점에서 두 함수는 다를 것이 없으며 모두 같은 코드를 호출하는 것으로 끝남. 그러나 커널모드에서 Zw*() 루틴은 프로시저와 연관된 system service number를 EAX에 세팅하고 system call 도중 함수 인자들이 복사될 수 있도록 EDX에 스택 포인터를 세팅. 그리고 시스템 서비스 디스패처를 호출. Nt*() 함수의 경우 단순히 system call로 점프한 뒤 실행하는데, 이는 최소한의 파라미터 검사와 접근 권한 검증으로 하나의 커널모드 프로시저에서 다른 하나로 곧바로 점프할 수 있게 하기 위한 것. Zw*() 함수의 경우 system call 접근을 위해 KiSystemService() 루틴을 통함으로써 코드의 ‘이전 모드’(시스템 서비스를 호출한 명령어들의 모드)가 명시적으로 커널모드로 세팅되어 파라미터와 접근 권한을 검사하는 전체 과정이 이전 모드의 올바른 세팅으로 진행될 수 있게 함(이전 액세스 모드를 커널 모드로 지정하여 인자 검증 제거(이전 모드가 유저모드일 때만 인자를 검사))
+
+##### System Call의 Life Cycle
+Winlogon.exe의 WriteFile() 호출을 예로 들자면, Windows API에 속하는 Kernel32.dll의 WriteFile()은 lookup table에 위치한 주소를 가져와 ntdll.dll의 NtWriteFile() 호출. NtWriteFile()은 NtWriteFile() Native 호출을 위한 system service number를 EAX 레지스터에 세팅하고 system call stub인 KiFastSystemCall의 주소를 가져와 호출. KiFastSystemCall 내의 명령어들은 스택 포인터를 EDX에 세팅하고 SYSENTER 호출. 따라서 프로그램 제어는 ntoskrnl.exe의 KiFastCallEntry()로 넘어가며, 이는 native NtWriteFile() 프로시저의 호출로 이어짐 
+
+##### 기타 커널모드 루틴들
+Native API의 401개 루틴 외에도 ntoskrnl.exe는 2,184개의 함수를 익스포트
+
+##### 커널모드 API 문서화
+공식 문서, 비공식 문서, 헤더 파일, 디버그 심볼, 직접 디스어셈블리 등
+
+#### <ins>부팅 절차</ins>
+일반적으로 윈도우 부팅 절차는 메모리에 로드되어 실행되는 부트 매니저와 함께 시작됨. 하지만 이러한 연속적인 이벤트들의 정확한 양상은 마더보드에 설치된 펌웨어의 타입에 의존
+
+##### BIOS 펌웨어 부팅
+BIOS 호환 펌웨어의 경우 머신의 Power-on self-test(POST)와 함께 시작. POST는 저수준 하드웨어 검사를 수행(예를 들어 POST는 얼마나 많은 온보드 메모리가 사용 가능한지 검사하고 그에 맞춰 구동)하고 또한 마더보드에 장착된 스토리지를 열거하고 그들의 상태를 결정하는 작업을 수행. 그 다음, 부트 섹터를 위해 부팅 가능한 디바이스 목록 검색(부팅 가능한 디바이스의 순서는 조정될 수 있으며 따라서 특정 디바이스를 항상 먼저 검사하도록 할 수 있음). 만약 부팅 가능한 디바이스가 하드 드라이브라면 이것의 부트 섹터는 마스터 부트 레코드(MBR). MBR 부트 코드는 active partition(부팅 가능 파티션, 시스템 볼륨)을 찾기 위해 파티션 테이블 검색. 그리고 그 파티션의 부트 섹터를 메모리로 로드(볼륨 부트 레코드(VBR). 첫 번째 부팅 가능한 디바이스가(즉, BIOS에 마주치는) 하드 디스크가 아니더라도(부팅 가능 DVD, 플로피 디스켓 등) BIOS는 장치의 VBR을 메모리로 로드해 실행할 것). VBR의 부트 코드는 파티션의 파일 시스템을 읽을 수 있으며 %SystemDrive%\bootmgr의 16비트 부트 관리자 프로그램을 찾을 수 있음. 이 16비트 코드는 32비트 부트 관리자 앞에 접속된 상태로, bootmgr은 실제도 두 개의 실행 파일이 연결된 형태(64비트 윈도우의 경우 bootmgr은 64비트 명령어들을 포함하고 있음). 이 16비트 스텁은 (MBR과 VBR의 코드와 같이) real mode에서 실행되며 필수 데이터 구조체들을 초기화하고, protected mode로 머신을 전환하고, 메모리에 protected mode 버전의 부트 관리자를 로드
+
+##### EFI 펌웨어 부팅
+펌웨어가 EFI 스펙을 따른다면 POST가 완료된 후, 작업은 다소 다르게 진행. EFI 펌웨어를 갖는 머신에선 MBR 또는 VBR에 내재하는 코드에 의존할 필요 없음. 부트 코드가 펌웨어(일반적으로 ROM)에 내장돼 있기 때문. 이 펌웨어는 EFI 변수들의 표준 집합을 사용해 구성 가능. 이러한 변수들 중 하나는 EFI 실행 프로그램의 경로를 포함하고 있으며, 윈도우는 부팅 과정을 계속하기 위해 이 프로그램을 사용. 설치 과정에서 윈도우 설치 프로그램은 %SystemDrive%\EFI\Microsoft\Boot\Bootmgfw.efi EFI 실행 프로그램을 명시하는 적절한 EFI 구성 변수에 단일 부트 옵션 엔트리를 추가. EFI 펌웨어는 페이징이 비활성화된 flat memory 모델을 사용해 protected mode로 머신을 전환. 이는 16비트 스텁 애플리케이션으로 폴백하지 않고도 32비트(또는 64비트) bootmgr.efi 프로그램이 실행될 수 있게 함
+
+##### 윈도우 부트 관리자
+BIOS와 EFI 머신들은 최종적으로 부트 관리자(bootmgr 또는 Bootmgfw.efi)를 메모리로 로드하고 실행. 부트 관리자는 시스템을 시작하기 위해 레지스트리 하이브 파일에 저장된 구성 데이터 사용. 이 하이브 파일은 BCD로, %SystemDrive%\Boot\(BIOS 머신) 또는 %SystemDrive%\EFI\Microsoft\Boot\(EFI 머신) 둘 중 한 군데 위치(regedit의 HKLM\BCD00000000, BCDEdit.exe로 확인 가능). BCD는 거의 항상 적어도 두 개의 항목을 가짐. 단일 윈도우 부트 관리자 객체와 하나 이상의 윈도우 부트 로더 객체들이 그것들. 부트 관리자 객체(레지스트리 서브키 {9dea862c-5cdd-4e70-acc1-f32b344d4795} 또는 BCDEdit의 {bootmgr})는 문자 기반 부트 관리자 화면이 어떻게 설정될 것인지를 전반적으로 조정(OS 메뉴의 엔트리 개수, boot tool 메뉴 엔트리, 기본 time-out 등). 부트 로더 객체(BCD 하이브 안의 임의의 GUID들 아래에 저장됨)들은 OS의 서로 다른 구성 설정들을 나타냄(디버깅 설정, 기본 구동 설정 등). 부트 관리자는 BCD를 열고 다룰 수 있을 정도로 윈도우 파일 시스템을 충분히 이해할 수 있음. 만약 구성 설정 공간이 단일 부트 로더 객체만을 포함한다면 부트 관리자는 문자 기반 UI를 표시하지 않을 것
+
+##### 윈도우 부트 로더
+만약 윈도우가 OS로 선택된다면 부트 관리자는 윈도우 부트 로더(winload.exe 또는 Winload.efi(EFI 시스템))를 로드하고 실행할 것이며, 그것의 위치는 관련된 부트 로더 객체에 의해 명시되어 있음. 일반적으로 그것은 %SystemRoot%\System32 디렉터리에 설치되어 있음. winload.exe 프로그램은 NTLDR 프로그램(이전의 버전들의 윈도우에서 OS를 로드하기 위해 사용해왔던)의 계승자 역할을 하고 있음. 윈도우 부트 로더는 SYSTEM 레지스트리 하이브를 로딩하는 것으로 시작. 하이브의 이름은 SYSTEM으로 %SystemRoot%\System32\config 디렉터리에 위치하며, HKLM\SYSTEM 아래로 마운트됨. 다음으로 윈도우 부트 로더는 그 자신의 이미지의 무결성을 검증하는 테스트를 수행. 이는 디지털 서명 카탈로그 파일을 로딩함으로써(nt5.cat) 수행되는데 파일은 %SystemRoot%\System32\CatRoot\{F750E6C3-38EE-11D1-85E5-00C04FC295EE}\에 위치함. 윈도우 부트 로더는 그것의 메모리 내 이미지의 서명을 nt5.cat 내의 것과 비교하는데 만약 서명들이 일치하지 않는다면, 머신이 커널모드 디버거에 연결돼 있지 않는 이상(비록 윈도우는 디버거 콘솔에 경고를 알리겠지만) 작동이 중지될 것. 그 자신의 이미지 검증이 끝나고 윈도우 부트 로더는 ntoskrnl.exe와 hal.dll을 메모리로 로드. 만약 커널 디버깅 활성화 상태라면 윈도우 부트 로더는 디버거가 구성한 통신 모드에 해당하는 커널모드 드라이버를 로딩할 것(kdcom.dll(null modem cable), kd1394.dll(IEEE 1394(“FireWire“) cable), kdusb.dll(USB 2.0 debug cable)). 만약 무결성 검사에서 실패하지 않는다면 ntoskrnl.exe가 의존하는 DLL들이 로드되고, 그들의 디지털 서명들이 nt5.cat의 것들과 비교하여 검증되도록 하며 초기화되도록 함. 이 DLL들은 pshed.dll, bootvid.dll, clfs.sys, ci.dll 순으로 로드됨. 이러한 DLL들이 로드되고 나면 윈도우 부트 로더는 HKLM\SYSTEM\CurrentControlSet\Services 키 아래의 모든 서브키들을 스캔. 윈도우 부트 로더는 boot class 카테고리에 속하는 디바이스 드라이버들을 찾는데(시그니처 체크에 실패한다면 윈도우는 시작을 거부할 것), 이들 레지스트리 키들은 Start라는 REG_DWORD 값으로 0x00000000을 가지고 있음(이는 SERVICE_BOOT_START 드라이버를 가리킴). 윈도우 부트 로더가 수행하는 마지막 단계는 protected-mode 페이징을 활성화(페이지 테이블을 빌드하진 않음)하고 부트 로그를 저장하며, ntoskrnl.exe로 제어를 넘기는 것
+
+##### 익스큐티브 초기화
+익스포트된 KiSystemStartup() 함수를 통해 제어가 ntoskrnl.exe로 넘어오면, ntoskrnl.exe 주소 공간 내에 상주하는 익스큐티브 서브시스템들이 초기화되고 사용되는 데이터 구조체들이 만들어짐. 예를 들어 메모리 관리자는 페이지 테이블과 two-ring 메모리 모델을 지원하는데 필요한 다른 내부 데이터 구조체들을 만듦. HAL은 각 프로세서에 대해 인터럽트 컨트롤러를 구성하며 IVT를 채우고, 인터럽트를 활성화시킴. SSDT가 만들어지고 ntdll.dll 모듈이 메모리로 로드됨. 익스큐티브는 Services 키를 탐색해 Start 값이 0x00000001인 서브키들을 찾음. 만약 드라이버 서명 무결성 체크가 활성화되어 있다면 익스큐티브는 각 시스템 클래스 드라이버의 디지털 서명을 점검하기 위해 ci.dll 내의 코드 무결성 루틴들을 사용할 것(이러한 동일한 암호화 루틴 중 많은 수가 winload.exe에 정적으로 링크되어 있어, DLL 없이도 서명을 검증 가능). 만약 드라이버가 서명 테스트를 실패하면 로딩이 허용되지 않음. 부팅 시 초기화의 일부로서 익스큐티브가 하는 마지막 일은, 세션 관리자(%SystemRoot%\System32\smss.exe)를 초기화하는 것
+
+IOCTL이란, 작은 서브필드로 이루어진 32비트 코드로 유저 애플리케이션에서 KMD와 소통 시에 사용. KMD는 이 값을 기반으로 프로그램 특정적인 동작 수행
+* IRP_MJ_READ : KMD에게 데이터를 받을 버퍼 전달
+* IRP_MJ_WRITE : KMD에게 디바이스에 전달될 데이터 전달
+* IRP_MJ_DEVICE_CONTROL : 임의의 목적으로 드라이버와 통신(루트킷의 유저모드 컴포넌트가 커널모드 컴포넌트와 통신 시 사용)

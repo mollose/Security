@@ -31,3 +31,7 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 
 #### Real Mode 인터럽트
 인터럽트의 각 특정 유형마다 그 유형의 인터럽트를 적절한 ISR과 연결시키는 정수 값이 할당됨. 인터럽트가 어떻게 처리될지의 방식은 real mode와 protected mode 각각 다름. real mode에서, 메모리의 첫 1KB(0x00000 ~ 0x003FF)는 interrupt vector table(IVT)이라는 데이터 구조체가 차지(protected mode의 interrupt descriptor table(IDT)과 동일한 역할). IVT와 IDT 모두 ISR의 메모리상 위치를 지정하는 interrupt descriptor 또는 interrupt vector들로 이루어져 있음. real mode에선 IVT는 각 ISR의 논리 주소를 연속적으로 저장해두고 있음. 각 interrupt vector는 interrupt type 0부터 256까지 순서대로 0x00000에서 시작하여 4바이트씩을 차지하고, 각 vector는 ISR의 effective address와 segment selector로 이루어짐(두 값 모두 주소의 낮은 바이트가 앞에 옴(little endian)). MS-DOS에선 BIOS가 interrupt 0 ~ 31을 사용하고 DOS가 32 ~ 63을 사용(DOS system call 인터페이스는 모두 근본적으로 interrupt들로 이뤄져 있음). 나머지(64 ~ 255)는 유저 정의 interrupt
+
+3가지 타입의 인터럽트가 존재
+* Hardware interrupt : 외부 디바이스에 의해 예상치 못하게 발생. CLI 명령어로 IF를 클리어함으로써 해제 가능한 maskable interrupt와 해제 불가능한 nonmaskable interrupt로 나뉨
+* Software interrupt : INT 명령어를 사용하는 프로그램에 의해 구현됨. INT 명령어는 interrupt vector를 지정하는 하나의 operand를 가짐. INT 명령어 실행 시 TF와 IF를 클리어함. FLAGS, CS, IP 레지스터를 순서대로 스택에 저장한 뒤, 인터럽트 벡터를 통해 ISR의 주소로 이동. IRET 명령어를 만날 때까지 ISR의 코드를 실행. *IRET은 스택에 저장된 값들을 다시 꺼낸 후* INT 명령 이후의 명령어들에 대해 실행 재개

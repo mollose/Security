@@ -1174,7 +1174,7 @@ Win32 API를 후킹하는 기술
 <br/>
 
 <p align="center">
- <img src="https://github.com/mollose/Security/assets/57161613/9290da43-66f4-46df-87ec-69471bd206f9" width="700">
+ <img src="https://github.com/mollose/Security/assets/57161613/9290da43-66f4-46df-87ec-69471bd206f9" width="600">
 </p><br/>
 
 * 모든 프로세스에는 기본적으로 kernel32.dll이 로드되며, kernel32.dll은 ntdll.dll을 로딩(특정 시스템 프로세스(smss.exe)는 kernel32.dll을 로드하지 않음). ntdll.dll의 역할이 바로 유저 모드 애플리케이션의 코드에서 발생하는 시스템 자원에 대한 접근을 커널모드에 요청하는 것. 일반적인 시스템 자원을 이용하는 API는 kernel32.dll과 ntdll.dll을 타고 내려가다 결국 SYSENTER 명령을 통해 커널모드로 진입하게 됨

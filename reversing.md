@@ -592,3 +592,63 @@ void main()
     FreeLibrary(hDll); // KeyHook.dll 언로딩
 }
 ```
+
+<br/>
+
+### 예시 #4: KeyHook.cpp
+```cpp
+#include “stdio.h“
+#include “windows.h“
+#define DEF_PROCESS_NAME “notepad.exe“
+HINSTANCE g_hInstance = NULL;
+HHOOK g_hHook = NULL;
+HWND g_hWnd = NULL;
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpvReserved)
+{
+    switch(dwReason)
+    {
+    case DLL_PROCESS_ATTACH :
+         g_hInstance = hinstDLL;
+        break;
+    case DLL_PROCESS_DETACH :
+         break;
+    }
+    return TRUE;
+}
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    char szPath[MAX_PATH] = {0, };
+    char* p = NULL;
+    // nCode == 0이라면 파라미터들은 keystroke 정보 포함
+    if (nCode == 0)
+    {
+        // bit 31 : 0 = key press, 1 = key release
+        if(!(!Param & 0x80000000))
+        {
+            GetModuleFileNameA(NULL, szPath, MAX_PATH);
+            p = strrchr(szPath, ’\\’); // 주어진 문자열에서 뒤에서부터, 문자 검색
+            if(!_stricmp(p + 1, DEF_PROCESS_NAME)) // 대소문자 구분 X
+                return 1; // 메시지를 넘겨주지 않고 바로 리턴
+        }
+    }
+    return CallNextHookEx(g_hHook, nCode, wParam, lParam);
+}// C++의 경우 오버로딩 등의 이유로, 같은 이름의 함수가 다른 함수일 수 있음
+#ifdef __cplusplus
+extern “C“{
+#endif
+__declspec(dllexport) void HookStart() // DLL에서 구현한 함수를 외부로 노출
+{
+    g_hHook = SetWindowsHookEx(WH_KEYBOARD, KeyboardProc, g_hInstance, 0);
+}
+__declspec(dllexport) void HookStop()
+{
+    if(g_hHook)
+    {
+        UnhookingWindowsHookEx(g_hHook);
+        g_hHook = NULL;
+    }
+}
+#ifdef __cplusplus
+}
+#endif
+```

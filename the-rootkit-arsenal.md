@@ -192,3 +192,27 @@ Windows Vista와 Windows Server 2008 이후 커널은 변화하는 요구의 수
 AWE는 32비트 유저 애플리케이션이 64GB까지의 물리 메모리에 접근하는 것을 허용. 이 기능은 winbase.h에 선언된 API를 기반으로 하고 있으며 이는 이 API를 사용한 프로그램이 선형 주소 공간에 의해 주어진 제한보다 큰 크기의 물리 메모리 범위에 접근하는 것을 허용하는 방식. AWE API 루틴으로는 VirtualAlloc(), VirtualAllocEx(), AllocateUserPhysicalPages(), MapUserPhysicalPages(), MapUserPhysicalPagesScatter(), FreeUserPhysicalPages()가 있음. AWE는 애플리케이션의 선형 주소 공간 내에 고정 크기 영역(window)들을 할당하고 물리 메모리 내의 더욱 큰 고정 크기 window들에 매핑한다는 점에서 주소 윈도잉 확장으로 불림. AWE를 통해 할당된 메모리는 페이징되지 않음(non-paged). AWE는 엄밀히 Microsoft의 기술이지만(또한 PAE 없이도 사용될 수 있음), 만약 애플리케이션이 4GB 경계 이상의 물리 메모리에 접근하는데 AWE API를 사용한다면 PAE의 활성화는 필요할 것. 또한 AWE 루틴을 호출하는 애플리케이션을 실행하는 유저는 ‘Lock Pages in Memory’ 특권 필요
 
 4GT는 선형 주소 공간을 재분할해 유저 애플리케이션이 더욱 큰 영역을 가질 수 있게 하나, 만약 애플리케이션이 3GB보다 큰 영역을 요구할 경우 AWE를 사용할 수 있음. AWE를 사용하는 애플리케이션에서 4GB 이상의 물리 메모리를 요구하면 PAE의 활성화가 필요할 수 있음
+
+#### 유저모드와 커널모드
+유저 영역은 유저모드에서 실행되는 코드를 포함하고 있음. 유저모드에서 실행되는 코드는 커널 영역 내의 어떤 것도 접근할 수 없으며 하드웨어와 직접 통신하는 것도, privileged 명령어를 실행하는 것도 불가능. 커널 영역 내의 코드는 커널모드에서 실행되며 유저모드의 코드에서 할 수 없는 모든 것이 가능
+
+##### 커널모드 컴포넌트
+HAL의 경우 interrupt controller들을 처리하기도 함(cf. halacpi.dll, halmacpi.dll). 파일의 PE 헤더를 조사하며 각 커널 모듈 간 import 관계 확인 가능
+
+##### 유저모드 컴포넌트
+환경 서브시스템은 유저모드에서 동작하는 바이너리 셋으로 특정 환경 및 API를 사용하도록 작성된 애플리케이션이 작동할 수 있도록 함(다른 운영 체제에서 동작하는 프로그램이 눈에 띄는 변화 없이 서브시스템 위에서 실행될 수 있게 함). Windows 서브시스템은 Csrss.exe, Win32k.sys, 서브시스템 API를 구현하는 유저모드 DLL로 이루어짐. Windows 서브시스템이 유저 애플리케이션에 노출하는 인터페이스(Windows API)는 Win32 API와 많이 닮아 있음
+
+#### 기타 메모리 보호 기능들
+유저모드에서 애플리케이션을 실행하는 것 외에도 윈도우가 프로그램의 주소 공간의 무결성을 보장하기 위해 구현하는 기능들이 존재
+
+##### 데이터 실행 방지(DEP)
+DEP는 Software-enforced와 Hardware-enforced 유형으로 나뉨. Software-enforced DEP는 Microsoft가 포함시킨, 보다 약한 구현. Hardware-enforced DEP는 IA32-EFER 머신 특정 레지스터의 NXE 플래그의 세팅을 요구. 비트가 세팅되어 있고 그리고 PAE 활성화 상태라면 PDE와 PTE의 64번째 비트가 XD라는 특수한 플래그로 변경됨. 만약 IA32_EFER = 1이고 XD = 1이라면 현재 참조되는 페이지로부터 꺼내지는 명령어들은 허용되지 않음. DEP는 BCD의 nx 정책 설정 세팅을 통해 부팅 시점에 구성됨. 특정 프로세스의 DEP와 연관된 엔트리들은 관련 KPROCESS 구조체 내의 KEXECUTE_OPTIONS 구조체에 위치해 있음(DEP 활성화 시 ExecuteDisable 필드가 1로 세팅되며 반대로 비활성화 시 ExecuteEnable 필드가 1로 세팅됨. DEP 구성이 프로세스에 의해 동적으로 변경될 수 없는 구성인 경우 Permanent 필드가 1로 세팅됨. Process Explorer의 DEP 프로세스 상태에 의하면 ‘DEP(permanent)’는 모듈이 시스템 바이너리라 DEP가 활성화된 경우, ‘DEP’는 DEP가 현재 정책 또는 opted in으로 인해 활성된 경우, ‘Empty’는 현재 정책 또는 opted out으로 인해 비활성화된 경우)
+
+##### 주소 공간 레이아웃 랜덤화(ASLR)
+ASLR과 DEP는 사용될 때 가장 효과적
+
+##### /GS 컴파일러 옵션
+/GS 컴파일러 옵션은 software-enforced DEP로 여겨질 수 있음. security cookie라는 특별한 값을 스택 프레임에 추가해 버퍼 오버플로를 방지. 만약 함수 반환 전의 스택 검사 시 security cookie가 변경되었다면 프로그램 제어는 sechook.c에 정의된 특수한 루틴들로 옮겨갈 것. 대부분의 구현은 루틴의 프롤로그와 에필로그에서 이루어짐. 스택 프레임 셋업 후 할당되는 추가 공간들은 인자 및 지역 변수들을 스택상의 함수 버퍼 아래(below, 낮은 주소값)로 복사될 수 있게 함으로써 버퍼 오버플로 발생 시 조작으로부터 그것들을 보호할 수 있음. 이러한 행위를 variable reordering이라 하며 컴파일러는 이러한 변수 복사들을 tv(temporary variables) 접두어로 나타냄. 공간들이 할당된 후 쿠키값은 스택 프레임 포인터(EBP) 값과 XOR 연산을 거치고 스택의 __$ArrayPad$로 이름 붙여진 지역 변수에 저장됨. __$ArrayPad$ 값은 프레임 내에서 지역 변수로 존재하는 버퍼보다 높은 주소에 위치하므로 오버플로 시 덮어써지게 될 것. 루틴 종료 시, 쿠키값을 대상으로 __security_check_cookie 루틴이 호출되어 쿠키값이 오버플로에 의해 변경되진 않았는지 점검 수행. 만약 변경되었다면 __security_error_handler()를 단계적으로 호출하는, report_failure() 함수 호출. 일반적으로 Visual Studio 컴파일러는 스택 프레임 보호가 필요한 루틴을 결정하는데 heuristic한 알고리즘을 사용하나, strict_gs_check pragma를 사용해 컴파일러가 로컬 변수를 조작하는 모든 루틴에 GS 쿠키를 삽입하도록 할 수 있음
+
+##### /SAFESEH 링커 옵션 
+만약 /SAFESEH 옵션이 IA-32 시스템에서 명시된다면 링커는 바이너리의 헤더에 모듈의 유효한 예외 핸들러의 목록을 갖는 특수한 테이블을 삽입. 실행 중에 예외 발생 시, 예외 처리에 책임이 있는 ntdll.dll 내의 코드는 현재 스택에 위치한 예외 핸들러 레코드가 테이블에 명시된 핸들러 중 하나인지를 확인할 것

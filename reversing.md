@@ -398,3 +398,68 @@ PE 파일은 자신이 어떤 라이브러리를 Import하고 있는지 IMAGE_IM
 
 ### PE 재배치
 프로그램에 하드코딩된 메모리 주소를 현재 로드된 주소에 맞게 변경해주는 작업
+1) 프로그램에서 하드코딩된 주소 위치를 찾음
+2) 값을 읽은 후, ImageBase만큼 뺌(VA ⇒ RVA)
+3) 실제 로딩 주소를 더함(RVA ⇒ VA)
+* 이때, PE 파일 내부에 하드코딩 주소들의 offset을 모아놓은 목록이 존재하는데, 이를 Relocation Table이라고 함(PE 파일 빌드 과정에서 제공됨). PE 헤더의 Base Relocation Table 항목을 통해 접근 가능(DataDirectory[5])
+
+<br/>
+
+### IMAGE_BASE_RELOCATION
+구조체 배열을 이루며 Base Relocation Table을 구성. 배열의 마지막은 NULL 구조체로 끝남
+* VirtualAddress : TypeOffset 배열의 기준 주소(RVA)
+* SizeOfBlock : 각 단위 블록의 전체 크기. 기준 주소별로 TypeOffset 배열이 블록을 이루고 있음
+* TypeOffset 배열 : 구조체 내에 표시된 주석은 이 구조체 밑으로 WORD 타입의 배열이 따라온다는 것을 의미하며, 배열 항목의 값은 프로그램에 하드코딩된 주소들의 offset
+* TypeOffset 값은 Type(4비트)과 Offset(12비트)가 합쳐진 형태
+  * 일반적인 Type 값은 3(IMAGE_REL_BASE_HIGHLOW)이고, 64bit용 PE+ 파일에선 A(IMAGE_REL_BASED_DIR64)임(간혹 악성코드 중에선 Type을 0(IMAGE_REL_BASED_ABSOLUTE))으로 수정하여 PE 로더의 재배치 과정을 피하는 경우도 있음)
+  * 프로그램에서 하드코딩 주소가 있는 Offset은, 섹션의 VirtualSize + Offset으로 계산됨. Offset을 가리키는 하위 12비트는 최대 1000의 값을 가지는데, 이를 초과하는 값을 표시하기 위해서는 그에 맞게 블록을 하나 더 추가할 필요
+
+<br/><br/>
+
+## 예제 #5: 실행 파일에서 .reloc 섹션 제거하기
+* DLL, SYS 파일에선 BaseRelocationTable이 필수요소지만, EXE 파일에선 제거해도 실행에 큰 영향이 없음
+1) .reloc 섹션 헤더 정리 : 섹션 헤더 내용을 0으로 덮어씀
+2) .reloc 섹션 제거 : HxD의 ‘Delete’로 물리적 제거
+3) IMAGE_FILE_HEADER 수정 : NumberOfSection 필드 수정
+4) IMAGE_OPTIONAL_HEADER 수정; SizeOfImage 필드 수정
+
+<br/><br/>
+
+## UPack
+PE 헤더를 독특한 방식으로 변형하는 기법을 사용하는 실행 압축기
+
+<br/>
+
+### UPack의 PE 헤더 분석
+* 헤더 겹쳐 쓰기 : MZ 헤더와 PE 헤더를 교묘하게 겹쳐 씀. e_magic과 e_lfanew를 제외한 나머지 MZ 멤버들은 프로그램 실행에 있어 아무 의미를 가지지 않으므로, 그리고 e_lfanew 값에 따라 IMAGE_NT_HEADERS의 위치가 가변적일 수 있으므로 두 헤더의 겹쳐 쓰기가 가능
+* IMAGE_FILE_HEADER.SizeOfOptionalHeader : SizeOfOptionalHeader의 값을 변경하여 헤더 안에 디코딩 코드를 삽입(Optional Header와 Section Header 사이의 공간에 코드 추가)
+* IMAGE_OPTIONAL_HEADER.NumberOfRvaAndSizes : NumberOfRvaAndSizes 값을 조작함으로써(10 ⇒ A) IMAGE_DATA_DIRECTORY 구조체 배열의 뒤쪽 6개 원소들을 무시하도록 만들며, 무시된 영역에 자신의 코드를 덮어씀(디코딩 코드)
+* IMAGE_SECTION_HEADER : offset to relocations, offset to line numbers, number of relocations, number of line numbers 구조체 멤버들은 실행에 있어 아무런 의미가 없는 멤버 값들
+
+#### <ins>섹션 겹쳐쓰기</ins>
+섹션과 헤더를 겹쳐쓰는 것
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/5798f030-bb55-40ea-80fa-bf1864ada8a4" width="700">
+</p><br/>
+
+* 두 번째 섹션의 크기는 파일의 대부분을 차지할 정도로 큰데, 이곳에 원본 파일이 압축되어 있음
+* 메모리에서 첫 번째 섹션의 크기는 14000으로, 이는 원본 파일의 SizeOfImage와 같음. 두 번째 섹션에 압축된 파일 이미지를 메모리 이미지의 첫 번째 섹션에 압축해제(notepad.exe의 원본에는 3개의 섹션이 있지만, 이를 하나의 섹션에 풀어내는 것)
+
+#### <ins>RVA to RAW</ins>
+일반적으로 섹션 시작의 PointerToRawData 값은 FileAlignment의 배수가 되어야 하며, 그러한 이유로 첫 번째 섹션의 PointerToRawData(ex. 10)는 PE 로더에서 강제로 배수에 맞추어 인식됨(ex. 0). 그러나 많은 PE 관련 유틸리티에선 첫 번째 섹션의 시작 offset 값 10을 그대로 RVA to RAW 변환 공식에 대입하기 때문에 잘못된 메모리 참조를 겪게 됨
+
+#### <ins>Import Table(IMAGE_IMPORT_DESCRIPTOR array)</ins>
+Import Table은 IMAGE_IMPORT_DESCRIPTOR 구조체 배열이며 마지막은 NULL 구조체로 끝나야 하나, 1EE ~ 201 offset에 위치한 첫 번째 구조체의 뒤에는 두 번째 구조체도 NULL 구조체도 오지 않음. 그러나 세 번째 섹션은 200 offset을 기준으로 끝나므로 200 offset 이후에 위치한 데이터들은 세 번째 섹션 메모리에 매핑되지 않고, 메모리에 로딩 시 이러한 나머지 영역은 NULL로 채워지므로, PE 스펙에 어긋나지 않게 됨
+
+#### <ins>IAT(Import Address Table)</ins>
+IMAGE_IMPORT_DESCRIPTOR의 Name 멤버의 RVA 값은 Header 영역에 속하며, 이 위치는 DOS 헤더에서 사용되지 않는 공간. 보통은 INT를 따라가 API 이름 문자열을 찾지만, INT의 주소값이 0일 때는 IAT를 따라가도 상관없음. IAT 영역은 동시에 INT의 역할도 하므로, Name Pointer 배열을 이루고 있고 각 RVA 값은 모두 헤더 영역 내에 포함되어 있음
+* 이때 LoadLibraryA와 GetProcAddress API를 임포트하는데, 두 함수는 원본 파일의 IAT를 구성할 때 편리하게 사용되기에 일반적으로 패커에서 많이 사용
+
+<br/><br/>
+
+## 예제 #6: UPack 디버깅(OEP 찾기)
+
+

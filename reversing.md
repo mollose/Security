@@ -1633,7 +1633,7 @@ Windows OS의 주요 라이브러리 API들은 일반적으로 ’MOV EDI, EDI�
 <br/>
 
 <p align="center">
- <img src="https://github.com/mollose/Security/assets/57161613/828b7984-c03f-4efc-b95e-ced5829eb7cf" width="700">
+ <img src="https://github.com/mollose/Security/assets/57161613/828b7984-c03f-4efc-b95e-ced5829eb7cf" width="600">
 </p><br/>
 
 <br/>

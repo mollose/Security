@@ -1061,3 +1061,8 @@ IDT 전체를 다른 넓은 위치로 옮긴 후 새로운 IID를 추가해야 �
 ## Code 인젝션
 상대방 프로세스에 독립 실행 코드를 삽입한 후 실행하는 기법
 
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/b9311f3e-710f-4765-9150-0d709888745b" width="400">
+</p><br/>

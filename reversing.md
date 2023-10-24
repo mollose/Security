@@ -370,3 +370,4 @@ PE 파일은 자신이 어떤 라이브러리를 Import하고 있는지 IMAGE_IM
 * 섹션 이름 변경(“.text” ⇒ “.UPX0”, “.data” ⇒ “.UPX1”)
 * 첫 번째 섹션의 RawDataSize = 0
 * EP는 두 번째 섹션에 위치(원본 파일에서는 첫 번째 섹션에 위치)
+* UPX 패커의 특징(notepad_upx.exe의 경우) : 첫 번째 섹션의 SizeOfRawData는 0이지만 VirtualSize는 높은 값으로 세팅되어 있음. 이 경우, 압축해제 코드와 원본 코드는 두 번째 섹션에 존재하며, 실실행 시 압축된 코드를 첫 번째 섹션에 해제시킴

@@ -948,3 +948,35 @@ int _tmain(int argc, TCHAR* argv[])
     return 0;
 }
 ```
+
+<br/>
+
+### 특권(Privilege) 
+로컬 컴퓨터 운영에 관련된 특별한 작업을 할 수 있는 권한. 사용자 계정, 그룹 계정에 개별적으로 부여됨으로써 NT(Windows 커널) 보안모델의 구성요소를 이룸. 특권은 개별 파일의 보안 설정인 보안 설정자보다 우선하며, 관리자만이 특권을 다룰 수 있고, 특권을 받은 사용자는 보안 설정자와 상관없이 모든 파일을 읽을 수 있음. 사용자가 NT 시스템에 로그온 할 때 시스템은 사용자의 특권 목록을 조사해 사용자의 액세스 토큰을 작성하며, 사용자가 특권 동작을 하려고 할 때 시스템이 사용자의 액세스 토큰을 검사해 해당 특권이 있는지 조사해보고, 특권이 없으면 작업을 거부. 또한 특권은 로컬 컴퓨터에만 적용된다는 점에서 지역적
+* 특권은 개별적으로 이름을 가지고 있으며 모두 문자열로 되어있음(Winnt.h 참고). 소유권 가져오기 특권, 디바이스 드라이버 설치가 가능한 특권, 백업 특권 등의 종류가 있음. 특권의 이름은 문자열로 정의되어 있으나, 시스템이 특권들을 구분할 때는 LUID라는 특별한 값을 사용. 특권은 로컬 컴퓨터 범위 내에서만 인정되기에, LUID는 시스템마다 다르며 심지어 컴퓨터를 부팅할 때마다 달라짐. 다음 두 함수는 특권의 이름과 LUID를 상호 변환시켜줌
+  * LookupPrivilegeName : LUID ⇒ Name
+  * LookupPrivilegeValue : Name ⇒ LUID
+* 시스템을 재부팅할 때는 ExitWindowsEx라는 함수를 사용하는데, 시스템을 재부팅하기 위해서는 반드시 재부팅 특권이 주어져야 함(관리자로 로그온 하였더라도 이 특권은 디폴트로 주어지지 않음). 관리자는 스스로에게 재부팅 특권을 부여할 수 있으므로 먼저 자신의 액세스 토큰에게 재부팅 특권을 부여한 후, ExitWindowsEx 함수를 호출하면 됨
+
+#### <ins>TOKEN_PRIVILEGES 구조체</ins>
+액세스 토큰에 포함되는 특권의 목록은 TOKEN_PRIVILEGES 구조체로 표현됨
+* PrivilegeCount : 토큰에 포함되는 특권의 개수
+* Privileges : LUID_AND_ATTRIBUTES 구조체의 배열
+  * Luid : 특권의 LUID를 나타내는 LUID_AND_ATTRIBUTES 멤버
+  * Attribute : SE_PRIVILEGE_ENABLED 플래그 설정 시 특권이 부여됨
+
+#### <ins>AdjustTokenPrivileges() 함수</ins>
+특권 목록 작성 후 프로세스의 액세스 토큰에 특권을 부여할 땐 AdjustTokenPrivileges() 함수를 사용
+* TokenHandle : 대상 액세스 토큰
+* DisableAllPrivilege : TRUE이면 해당 토큰의 모든 특권이 취소됨. FALSE라면 NewState가 지정하는 특권 목록이 액세스 토큰에 부여됨
+* 토큰이 지정된 특권을 갖지 못하였을 시, ERROR_NOT_ALL_ASSIGNED 에러 반환
+
+<br/>
+
+* PE 파일에서 직접 임포트하는 DLL의 경우, 프로세스 실행 중에 임의로 이젝션 불가
+
+<br/><br/>
+
+## PE 패치를 이용한 DLL 로딩
+실행 파일을 직접 수정하여 DLL을 강제로 로딩
+* urlmon.dll에서 제공하는 URLDownloadToFile() API 함수는 wininet.dll의 InternetOpen(), InternetOpenUrl(), InternetReadFile() API 함수만으로도 구현 가능

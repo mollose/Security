@@ -216,4 +216,27 @@ Name 문자열을 읽은 후, 루프를 돌면서 문자를 암호화(XOR, ADD, 
 
 <br/><br/>
 
+## PE File Format
+* PE Header : PE 파일이 실행되기 위한 모든 정보가 구조체 형식으로 저장되어 있음
+
+<br/>
+
+### PE 파일 형식
+OBJ 파일 제외, 모두 실행 가능한 파일 형식
+* 실행파일 계열 : EXE, SCR(쉘(Explorer.exe)에서 직접 실행)
+* 라이브러리 계열 : DLL, OCX
+* 드라이버 계열 : SYS
+* 오브젝트 파일 계열 : OBJ
+
+<br/>
+
+### PE 파일의 기본 구조
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/28bb5c01-45c0-4578-bb72-72592bd707f4" width="700">
+</p><br/>
+
+
 

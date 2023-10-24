@@ -1163,3 +1163,42 @@ BOOL InjectCode(DWORD dwPID)
     /* 생략 */
 }
 ```
+
+<br/><br/>
+
+## API 후킹
+Win32 API를 후킹하는 기술
+* 후킹 : 정보를 가로채고 실행 흐름을 변경하며, 원래와는 다른 기능을 제공하게 하는 기술
+* API : Windows OS에서는 사용자 애플리케이션이 시스템 자원(프로세스, 스레드, 메모리, 파일, 네트워크, 비디오, 사운드 등)을 사용하고자 할 때 직접 접근할 수 있는 방법이 없으며, 애플리케이션은 Win32 API를 이용해 커널에게 자원을 요청해야 함
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/9290da43-66f4-46df-87ec-69471bd206f9" width="400">
+</p><br/>
+
+* 모든 프로세스에는 기본적으로 kernel32.dll이 로드되며, kernel32.dll은 ntdll.dll을 로딩(특정 시스템 프로세스(smss.exe)는 kernel32.dll을 로드하지 않음). ntdll.dll의 역할이 바로 유저 모드 애플리케이션의 코드에서 발생하는 시스템 자원에 대한 접근을 커널모드에 요청하는 것. 일반적인 시스템 자원을 이용하는 API는 kernel32.dll과 ntdll.dll을 타고 내려가다 결국 SYSENTER 명령을 통해 커널모드로 진입하게 됨
+
+<br/>
+
+* API 후킹의 이점 : API 호출 전후에 사용자의 훅 코드를 실행할 수 있으며, API에서 넘어온 파라미터 혹은 API 함수의 리턴값을 엿보거나 조작할 수 있고, API 호출 자체를 취소시키거나 사용자 코드로 실행 흐름 변경 가능
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/4d27aed7-d1de-478d-95e8-23a0a2e327fd" width="400">
+</p><br/>
+
+<br/>
+
+### 테크 맵
+API 후킹의 모든 기술적 범주를 포함
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/cdb30e54-e80c-40b0-8a85-d50a51d2a8d3" width="400">
+</p><br/>
+
+#### <ins>Method</ins>
+API 후킹 방식은 작업 대상이 ‘파일’(static)인지, 혹은 프로세스 메모리인지(dynamic)에 따라 달라짐. static 방식의 API 후킹은 프로그램 실행 전 최초 한 번만 후킹되며 Unhook이 불가능하고, 매우 특수한 상황에서만 사용됨 

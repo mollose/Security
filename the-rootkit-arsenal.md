@@ -38,7 +38,7 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 
 3가지 타입의 인터럽트가 존재
 
-<span style="color:gray">##### Hardware interrupt</span>
+<ins>##### Hardware interrupt</ins>
 외부 디바이스에 의해 예상치 못하게 발생. CLI 명령어로 IF를 클리어함으로써 해제 가능한 maskable interrupt와 해제 불가능한 nonmaskable interrupt로 나뉨
 
 ##### Software interrupt

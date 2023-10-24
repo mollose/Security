@@ -30,7 +30,7 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 * real-mode OS의 대표적 예는 MS-DOS로, 특수한 드라이버 없이 DOS는 20비트 주소 공간으로 제한됨. 첫 640KB(0x00000 ~ 0x9FFFF) 영역은 conventional memory로, 이 공간의 양호한 청크들은 시스템 레벨 코드로 채워짐. 한편 1MB 경계까지의 나머지 영역(0xA0000 ~ 0xFFFFF)은 upper memory area(UMA)로, ROM이나 주변 장치의 RAM 같은 하드웨어에 의해 사용되도록 예약된 공간. UMA 내에는 대개 하드웨어에 의해 사용되지 않는 DOS-accessible RAM 슬롯들이 있는데 이들을 upper memory blocks(UMBs)로 부름. 1MB 상위의 메모리 공간은 extended memory로 불리며, 80386과 같은 프로세서들이 출시되었을 당시 real-mode 프로그램들이 extended memory에 접근 가능하게 하는 DOS extender들이 존재했음
 * 변경된 부트 섹터 코드를 통해 OS를 선취하여 루트킷을 메모리로 들여오는 경우 BIOS에 의해 제공되는 서비스에 의존해야 할 수 있는데, BIOS는 real mode에서 작동(커널이 메모리 보호를 통해 그 자신을 격리하기 전에 작업을 쉽게 해치울 수 있게 함)
 
-#### Real Mode 실행 환경
+#### *Real Mode 실행 환경*
 현재의 real-mode 환경은 8086 / 88 프로세서의 기능에 맞춰져 있음. 6개의 세그먼트 레지스터, 4개의 범용 레지스터, 3개의 포인터 레지스터와 두 개의 인덱싱 레지스터, 그리고 FLAGS 레지스터로 구성되며, 이들 모두는 16비트 사이즈. 세그먼트 레지스터(CS, DS, SS, ES)는 segment selectors를 저장하고 8086 / 88 이후의 프로세스들에 존재하는 FS, GS 레지스터 역시 segment selectors 저장. 포인터 레지스터(IP, SP, BP)는 effective addresses를 저장. 범용 레지스터(AX, BX, CX, DX)는 다양한 operand와 주소값을 저장 가능하며 또한 별도의 특수한 목적을 갖고 있음(AX는 산술 연산에서의 Accumulator, BX는 Base Register로 메모리를 간접적으로 지시하기 위한 인덱스로 사용됨. CX는 Counter와 loop index, DX는 Data Register로 AX와 함께 연산에 사용). 인덱싱 레지스터(SI, DI)는 indexed addressing을 구현하기 위해 사용되며 문자열과 산술 연산에도 사용됨. FLAGS 레지스터는 CPU의 상태나 특정 연산 결과를 나타냄. 16비트 중 9비트만이 플래그로 사용되며, trap flag인 TF(bit 8)와 interrupt enable flag인 IF(bit 9) 포함. 만약 TF가 세팅되면 프로세서는 single-step 인터럽트를 각 명령어 이후마다 발생시킴. 만약 IF가 세팅되면 인터럽트를 받아들이는 대로 승인 및 실행. 윈도우는 아직까지도 16비트 머신 코드 디버거(debug.exe)를 내장하고 있음
 
 #### Real Mode 인터럽트

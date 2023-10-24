@@ -1064,5 +1064,5 @@ IDT 전체를 다른 넓은 위치로 옮긴 후 새로운 IID를 추가해야 �
 <br/>
 
 <p align="center">
- <img src="https://github.com/mollose/Security/assets/57161613/b9311f3e-710f-4765-9150-0d709888745b" width="700">
+ <img src="https://github.com/mollose/Security/assets/57161613/b9311f3e-710f-4765-9150-0d709888745b" width="500">
 </p><br/>

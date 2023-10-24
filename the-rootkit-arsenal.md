@@ -29,7 +29,7 @@
     + [Protected-Mode Interrupt Table](#protected-mode-interrupt-table)
     + [페이징을 통한 보호](#페이징을-통한-보호)
       - [supervisor-mode 접근](#supervisor-mode-접근)
-      - [user-mode 접근]#user-mode-접근)
+      - [user-mode 접근](#user-mode-접근)
 - [System Briefing](#system-briefing)
   * [Windows상의 물리 메모리](#windows상의-물리-메모리)
     + [윈도우가 물리 주소 확장을 사용하는 방법](#윈도우가-물리-주소-확장을-사용하는-방법)

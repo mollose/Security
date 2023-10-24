@@ -1629,3 +1629,31 @@ Windows OS의 주요 라이브러리 API들은 일반적으로 ’MOV EDI, EDI�
 <br/>
 
 ### Debug 기법(ex. 메모장 WriteFile() 후킹)
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/828b7984-c03f-4efc-b95e-ced5829eb7cf" width="700">
+</p><br/>
+
+<br/>
+
+### IAT 후킹 기법(ex. 계산기, 한글을 배우다)
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/36e4ec20-0922-4e68-83a8-bf54d9e3cf1c" width="700">
+</p><br/>
+
+<br/>
+
+### API 코드 패치 기법(ex. ‘스텔스’ 프로세스)
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/9c8b8341-deb2-4854-bc27-513b58003320" width="700">
+</p><br/>
+
+<br/>

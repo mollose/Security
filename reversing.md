@@ -559,3 +559,6 @@ Windows는 Event Driven 방식으로 동작하는 GUI 제공. 이벤트 발생 �
 * hMod : hook procedure가 속한 DLL 핸들
 * dwThreadId : hook을 걸고 싶은 thread의 ID(0을 주고 호출하면 글로벌 훅이 설치됨(모든 프로세스 영향))
 * SetWindowsHookEx()를 이용하여 훅을 설치해놓으면, 어떤 메시지가 발생했을 때 운영 체제가 hook procedure를 가진 DLL 파일을 프로세스에 강제로 인젝션하고, 등록된 hook procedure를 호출
+
+1) HookMain.exe는 훅 프로시저(KeyboardProc)가 존재하는 KeyHook.dll을 최초로 로드하고, SetWindowsHookEx()를 사용해 키보드 훅을 설치
+2) 다른 프로세스에서 키 입력 이벤트가 발생하면, OS에서 해당 프로세스의 메모리 공간에 KeyHook.dll을 강제로 로드하고 KeyboardProc() 함수 호출

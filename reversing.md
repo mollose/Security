@@ -371,3 +371,23 @@ PE 파일은 자신이 어떤 라이브러리를 Import하고 있는지 IMAGE_IM
 * 첫 번째 섹션의 RawDataSize = 0
 * EP는 두 번째 섹션에 위치(원본 파일에서는 첫 번째 섹션에 위치)
 * UPX 패커의 특징(notepad_upx.exe의 경우) : 첫 번째 섹션의 SizeOfRawData는 0이지만 VirtualSize는 높은 값으로 세팅되어 있음. 이 경우, 압축해제 코드와 원본 코드는 두 번째 섹션에 존재하며, 실실행 시 압축된 코드를 첫 번째 섹션에 해제시킴
+
+<br/>
+
+### 예제 #4: notepad_upx 디버깅
+* GetModuleHandleA() : notepad.exe. 프로세스의 ImageBase를 구함
+* notepad_upx의 EP는 두 번째 섹션의 끝 부분에 존재하며, notepad의 압축된 원본 코드는 EP 주소 위쪽에 존재함
+* EP 진입 이후 PUSHAD 명령으로 레지스터 값을 저장한 뒤, ESI와 EDI 레지스터를 각각 두 번째 섹션 시작 주소와 첫 번째 섹션 시작 주소로 세팅. ESI가 가리키는 버퍼에서, 압축해제된 원본파일의 코드가 저장될 장소인 EDI가 가리키는 위치로 메모리 복사 진행
+
+#### <ins>방대한 코드를 트레이싱할 때의 원칙</ins>
+루프를 만나면 그 역할을 알아보고 탈출
+* 디코딩 루프 : ESI가 가리키는 두 번째 섹션의 주소에서 차례대로 값을 읽어, 적절한 연산을 거쳐 압축을 해제한 뒤 EDI가 가리키는 첫 번째 섹션에 값을 써줌
+* CALL / JMP 복원 루프 : 원본 코드의 CALL / JMP 명령어(opcode E8 / E9)의 destination 주소를 복원하는 코드(EDI 위치를 대상으로 바이트별 비교를 통해 E8 / E9 명령어를 찾음)
+* IAT 세팅 루프 : 디코딩을 거친 이후의 두 번째 섹션(UPX1) 영역에는 notepad.exe에서 사용하는 API 이름 문자열이 저장되어 있음. 이 API 문자열을 이용해 GetProcAddress() 함수를 호출하여 시작 주소를 얻은 후, EBX가 가리키는 원본 notepad.exe의 IAT 영역에 API 주소를 입력
+
+* 최종적으로 JMP 명령어에 의해 OEP(Original Entry Point)로 이동
+* UPX 패커의 특징 중 하나는 EP 코드가 PUSHAD, POPAD로 둘러싸여 있다는 것으로, OEP로 가는 JMP 명령어가 POPAD 명령어 직후에 나타난다
+  * PUSHAD에서 사용한 스택 주소를 따라가 하드웨어 브레이크 포인트를 설치함으로써, 동일한 주소에 접근하는 POPAD 명령어를 찾을 수 있음
+
+<br/><br/>
+

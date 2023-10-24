@@ -217,7 +217,7 @@ ASLR과 DEP는 사용될 때 가장 효과적
 ##### /SAFESEH 링커 옵션
 만약 /SAFESEH 옵션이 IA-32 시스템에서 명시된다면 링커는 바이너리의 헤더에 모듈의 유효한 예외 핸들러의 목록을 갖는 특수한 테이블을 삽입. 실행 중에 예외 발생 시, 예외 처리에 책임이 있는 ntdll.dll 내의 코드는 현재 스택에 위치한 예외 핸들러 레코드가 테이블에 명시된 핸들러 중 하나인지를 확인할 것
 
-#### Native API
+#### <ins>Native API</ins>
 전통적으로 UNIX와 같은 OS는 항상 명확하게 정의된 well-documented system call 셋을 포함해왔음. 반면 윈도우의 경우 Native API라는 system call 인터페이스를 가지며 Windows API 뒤에 그것들을 감추어왔음. 이러한 방식 덕분에 만약 system call 인터페이스 업데이트를 포함하는 시스템 패치가 이루어지더라도 개발자는 이에서 소외되지 않을 수 있는데, 그들의 코드는 Windows API에 의존하고 있기 때문
 
 ##### The IVT Grows Up

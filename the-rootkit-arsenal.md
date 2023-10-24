@@ -83,3 +83,25 @@ PDE와 PTE는 모두 32비트 구조체(덕분에 page directory와 page table �
 
 #### 제어 레지스터 세부 사항 
 CR3 레지스터는 page directory의 첫 바이트 물리 주소를 가지며, 각 프로세스마다 고유의 CR3 복사값을 지님으로써 이 값을 커널이 갖는 스케줄링 context로 유지하고, 따라서 두 프로세스가 동일한 선형 주소를 갖더라도 서로 다른 물리 주소에 매핑되는 것이 가능해짐. 이것은 프로세스마다 고유의 page directory를 가진 결과. 이는 메모리 보호의 비교적 덜 분명하게 보이는 한 측면. 한편 CR0 레지스터 역시 주목할 만한데, CR0의 16번째 비트는 WP(Write Protection) 플래그. **WP 세팅 시 supervisor-level 코드가 읽기 전용 user-level 메모리 페이지 내에 쓰는 것을 허용하지 않음**. 이 메커니즘은 전통적으로 UNIX 시스템에서 사용되는 프로세스 생성의 copy-on-write 방식(forking과 같이)을 용이하게 하는 반면, 루트킷이 특정 시스템 데이터 구조체를 수정할 수 없다는 것을 의미하기에 위험할 수 있음
+* CR4 : PSE(세팅 시 큰 페이지 사이즈 사용(2 또는 4MB)), PAE(세팅 시 PAE 활성화)
+* CR3 : page directory base 주소(bits 12 ~ 31, PAE 환경에서는 PDPT의 물리 base 주소를 나타내는 27비트(5 ~ 31) 값을 가짐. 52비트 물리 주소를 나타내기 위해 암시적으로 뒤에 0이 붙게 됨)
+* CR2 : 페이지 폴트를 발생시킨 선형 주소
+* CR1 : 예약된 공간
+* CR0 : PG(세팅 시 페이징 활성화), PE(세팅 시 protected mode 활성화. real mode로부터 전환 시 OS에 의해 세팅됨)
+
+</br>
+
+### 메모리 보호 구현
+분석 전, 어떠한 메모리 보호도 적용되지 않은 환경을 상상해볼 수 있을 것. 페이징이 비활성화된 두 개의 Ring 0 세그먼트가 전체 데이터(0x00000000 ~ 0xFFFFFFFF) 영역에 걸쳐 있어 모든 프로세스가 Ring 0상에서 실행되고 모든 메모리에 액세스 가능한 환경
+
+#### 세그먼테이션을 통한 보호
+현재의 OS가 실제로 메모리를 관리하는 방식은 아님. IA-32 플랫폼상 세그먼트를 이용한 보호는 주소 해상 과정에서 한계 검사, 세그먼트 타입 검사, privilege-level 검사, 제한된 명령어 검사 등을 수행할 것. 이러한 검사들은 메모리 접근 사이클 시작 전에 수행될 것이며 위반이 발생할 때 일반 보호 예외가 프로세서에 의해 일어날 것. 게다가 주소 해상 과정과 함께 수행되기에 검사로 인한 성능 저하는 발생하지 않음
+
+#### 한계 검사
+한계 검사는 segment descriptor의 20비트 limit 필드를 사용해 프로그램이 해당 위치에 존재하지 않은 메모리에 접근할 수 없게 함. 프로세서는 또한 GDTR의 size limit 필드를 사용해 segment selector가 GDT 밖의 엔트리에 접근하지 못하게 방지
+
+#### 타입 검사
+타입 검사는 segment descriptor의 S 플래그와 type 필드를 사용하여, 프로그램이 적절하지 못한 방식으로 메모리 세그먼트 접근을 시도하는 것을 방지(ex. CS 레지스터는 코드 세그먼트에 대한 selector로만 로드될 수 있음. far call 또는 far jump는 다른 코드 세그먼트 segment descriptor 또는 call gate에만 접근 가능). 또한 만약에 프로그램이 첫 GDT 엔트리를 가리키는 selector로 CS 또는 SS 세그먼트 레지스터 로드를 시도한다면, 일반 보호 예외가 발생할 것
+
+#### 특권 검사
+Privilege-level 검사는 4개의 privilege level에 기반. 특권 검사는 바깥 링에 위치하는 프로세스가 안쪽 링에 존재하는 세그먼트에 고의로 접근하는 것을 막는 것. 특권 검사 적용을 위해 CPL, RPL, DPL의 세 가지 지표 사용. Current Privilege Level<strong>(CPL)은 기본적으로, 실행 중인 프로세스의 CS, SS 레지스터 내에 저장된 selector들의 RPL</strong> 값. 프로그램의 CPL은 일반적으로 현재 코드 세그먼트의 privilege level. far jump나 far call의 실행에 따라 CPL은 바뀔 수 있음. 프로세서의 세그먼트 레지스터 중 하나에 segment descriptor와 연관된 segment selector가 로드될 때 Privilege-level 검사 수행. 이는 프로그램이 다른 코드 세그먼트 내의 데이터에 접근하려 하거나 또는 세그먼트 간 점프를 통해 프로그램 제어를 옮길 때 발생. 만약 프로세서가 Privilege-level 위반을 식별하면 일반 보호 예외 발생. 다른 데이터 세그먼트 내의 데이터에 접근할 때 데이터 세그먼트의 selector가 반드시 스택 세그먼트(SS) 레지스터나 데이터 세그먼트 레지스터(DS, ES, FS, GS)에 로드되어야 함. 프로그램이 다른 코드 세그먼트로 점프하는 제어 변경을 시도할 때 목적지 코드 세그먼트의 segment selector가 CS 레지스터에 반드시 로드되어야 함. CS 레지스터는 명시적으로 변경될 수 없으며 JMP, CALL, RET, INT, IRET, SYSENTER, SYSEXIT 등의 명령어에 의해 암시적으로만 변경 가능. 다른 세그먼트 내의 데이터 접근 시 프로세서는 DPL이 RPL과 CPL 둘보다 크거나 같음을 보장하기 위해 검사 진행(DPL은 프로그램이나 태스크가 세그먼트에 액세스를 허용해야 하는 가장 낮은 권한 레벨(숫자상으로 가장 높은)을 나타냄). 만약 조건이 성립한다면 프로세서는 해당 데이터 세그먼트의 segment selector를 데이터 세그먼트 레지스터에 로드할 것. 다른 세그먼트 내의 데이터에 접근하려는 프로세스는 해당 데이터 세그먼트의 segment selector의 RPL 값을 제어. SS 레지스터에 새로운 스택 세그먼트의 segment selector를 로드할 때, 스택 세그먼트의 DPL과 segment selector의 RPL은 모두 CPL과 일치해야 함. nonconforming 코드 세그먼트(NCCS)는 보다 낮은 특권(보다 높은 CPL)에서 실행하는 프로그램에 의해 접근될 수 없는 코드 세그먼트로, nonconforming 코드 세그먼트로 제어를 옮길 때 호출 루틴의 CPL은 목적지 세그먼트의 DPL과 같아야 함. 목적지 세그먼트와 연관된 segment selector의 RPL은 CPL보다 작거나 같아야 함. conforming 코드 세그먼트(CCS)로 제어를 옮길 때 호출 루틴의 CPL은 목적지 세그먼트의 DPL보다 크거나 같아야 함. 이 경우 목적지 세그먼트의 segment selector의 RPL 값은 검사되지 않음

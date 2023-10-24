@@ -247,6 +247,6 @@ system service number는 32비트 값으로, 처음 12비트는 어떤 시스템
 </br>
 
 <img src="https://github.com/mollose/Security/assets/57161613/c1e28417-3ab0-4662-88a1-55cf1759f406" width="800">
-</br>
+</br></br>
 
 * KeServiceDescriptorTable의 첫 16바이트는 윈도우 Native API를 위한 SSDT를 나타내는 SST(Windows 7의 경우 이는 401개의 루틴들로 구성(nEntries = 0x191)). KeServiceDescriptorTableShadow의 첫 32바이트는 두 개의 SST를 포함하고 있음. 첫 번째 SST는 KeServiceDescriptorTable의 SST의 복사본, 두 번째 SST는 Win32k.sys 커널모드 드라이버에 의해 구현된 USER와 GDI 루틴들을 위한 SSDT를 나타냄

@@ -332,4 +332,41 @@ PE 파일은 자신이 어떤 라이브러리를 Import하고 있는지 IMAGE_IM
 
 <br/>
 
+### EAT(Export Address Table)
+라이브러리 파일에서 제공하는 함수를 다른 프로그램에서 가져다 사용할 수 있도록 해주는 메커니즘
 
+#### <ins>IMAGE_EXPORT_DIRECTORY</ins>
+라이브러리의 EAT를 설명하는 구조체로, 주로 DLL 파일에 존재. IMAGE_EXPORT_DIRECTORY는 IAT를 설명하는 IID 구조체와는 달리 PE 파일에 단 하나만 존재(IID는 PE 파일이 여러 개의 라이브러리를 동시에 Import 할 수 있다는 특성으로 인해 배열 형태로 존재)
+* NumberOfFunctions : 실제 export 함수 개수
+* NumberOfNames : export 함수 중 이름을 가지는 함수 개수(≤ NumberOfFunctions)
+* AddressOfFunctions : export 함수들의 시작 위치 배열의 주소(배열의 원소 개수 = NumberOfFunctions)
+* AddressOfNames : 함수 이름 배열의 주소(배열의 원소 개수 = NumberOfNames)
+* AddressOfOrdinals : ordinal 배열의 주소(배열의 원소 개수 = NumberOfNames)
+* AddressOfFunctions, AddressOfNames는 각각 4byte RVA 배열의 시작을 가리키며, AddressOfOrdinals는 2byte Ordinal 배열의 시작을 가리킴
+
+#### <ins>GetProcAddress()가 함수 이름을 이용하여 라이브러리에서 함수 주소를 얻는 순서</ins>
+1) AddressOfNames 멤버를 이용해 함수 이름 배열로 이동
+2) 문자열 주소가 저장된 함수 이름 배열에서 문자열 비교(strcmp)로 원하는 이름을 찾음(이때의 배열 인덱스는 name_index)
+3) AddressOfNameOrdinals 멤버를 이용해 Ordinal 배열로 이동
+4) Ordinal 배열에서 name_index로 해당 ordinal_index 값을 찾음
+5) AddressOfFunctions 멤버를 이용해 함수 주소 배열(EAT)로 이동
+6) 함수 주소 배열(EAT)에서 ordinal_index를 인덱스로 하여 함수의 시작 주소(RVA)를 얻음
+* export하는 함수의 이름이 존재하지 않거나 index != ordinal인 경우도 있음
+* 종종 함수 이름 없이 Ordinal(고유번호)만 공개하는 경우가 있는데, 이 경우엔 Ordinal로 해당 함수의 주소를 찾는 것이 가능(ex. pFunc = GetProcAddress(5);)
+
+<br/>
+
+### 실행 압축 
+실행(PE) 파일을 대상으로 파일 내부에 압축해제 코드를 포함하게 하여, 실행되는 순간에 메모리에서 압축을 해제하도록 하는 기술. 실행 압축 파일 역시 PE 파일이며, EP 코드에서 decoding 루틴이 실행되면서 메모리에서 압축을 해제한 후 실행(실행시간이 미세하게 느려짐)
+* 패커(Packer) : Run-Time 패커. PE 파일을 실행 압축 파일로 만들어주는 유틸리티
+* 프로텍터(Protector) : 실행 압축과 함께, 리버싱을 막기 위한 다양한 기법 추가(원본 파일보다 크기가 커지는 경향). PE 파일 자체와 실행 시의 프로세스 메모리 보호
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/f8b4dda1-d191-4744-9202-81fc4b8187fd" width="700">
+</p><br/>
+
+* 섹션 이름 변경(“.text” ⇒ “.UPX0”, “.data” ⇒ “.UPX1”)
+* 첫 번째 섹션의 RawDataSize = 0
+* EP는 두 번째 섹션에 위치(원본 파일에서는 첫 번째 섹션에 위치)

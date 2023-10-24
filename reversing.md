@@ -247,3 +247,45 @@ OBJ 파일 제외, 모두 실행 가능한 파일 형식
 
 ### DOS Header
 DOS 파일에 대한 하위 호환성을 고려, PE Header의 제일 앞부분에는 기존 DOS EXE Header를 확장시킨 IMAGE_DOS_HEADER 구조체가 존재(40h 크기)
+* e_magic : DOS Signature, 모든 PE 파일의 시작 부분에 존재(4D5A(ASCII 값 “MZ”))
+* e_lfanew : NT Header의 offset을 표시. e_lfanew가 가리키는 위치에 NT Header 구조체가 존재해야 함
+
+<br/>
+
+### DOS Stub
+DOS 환경에서 실행되는 코드를 가지는 영역. DOS Stub의 존재 여부는 옵션이며, 크기도 일정하지 않음. 코드와 데이터의 혼합으로 이루어져 있으며, 이를 이용하여 DOS와 Windows 모두에서 실행 가능한 파일을 만들 수도 있음
+
+<br/>
+
+### NT Header
+IMAGE_NT_HEADERS 구조체 존재(F8h 크기)
+* Signature : PE Signature로서 50450000h(“PE”00) 값을 가짐
+
+#### <ins>File Header</ins>
+IMAGE_FILE_HEADER 구조체를 가짐
+* Machine : CPU별 고유값으로, winnt.h 파일에 정의되어 있음(32bit Intel 호환칩은 14Ch 값)
+* NumberOfSections : 섹션의 개수로, 0보다 커야함
+* SizeOfOptionalHeader : IMAGE_OPTIONAL_HEADER32의 크기를 나타냄. C 언어의 구조체이기 때문에 그 크기가 결정되어 있음에도 불구하고, Windows의 PE Loader는 SizeOfOptionalHeader 값을 보고 구조체의 크기를 인식(PE32+ 형식의 파일은 IMAGE_OPTIONAL_HEADER64 구조체를 사용하는데, 그 크기에서 IMAGE_OPTIONAL_HEADER32 구조체와는 차이가 있어, SizeOfOptionalHeader에서 구조체의 크기를 명시해줌)
+* Characteristics : 파일의 속성(실행가능 형태인지, 혹은 DLL 파일인지)을 나타내며, bit OR 형식으로 조합되어 있음. winnt.h 파일에 값이 정의되어 있음
+* TimeDateStamp : 해당 파일의 빌드 시간. 파일 실행에 영향 X
+
+#### <ins>Optional Header</ins>
+IMAGE_OPTIONAL_HEADER32 구조체를 가짐
+* Magic : 32bit PE 파일은 10Bh, 64bit PE 파일은 20Bh 값을 가짐
+* AddressOfEntryPoint : EP(Entry Point)의 RVA 값을 가짐
+* ImageBase : 프로세스의 가상 메모리는 0 ~ FFFFFFFFh 범위의 크기인데, 이때, ImageBase는 PE 파일이 메모리 내에서 매핑되는 시작 주소를 나타냄(EXE, DLL 파일은 user memory 영역인 0 ~ 7FFFFFFFh 범위 내, SYS 파일은 kernel memory 영역인 80000000h ~ FFFFFFFFh 범위 내 위치). 일반적으로 개발도구들이 만드는 EXE 파일의 ImageBase 값은 00400000h, DLL 파일은 01000000h임. PE Loader는 PE 파일 실행 시 프로세스를 생성하고, 파일을 메모리에 매핑시킨 후, EIP 레지스터 값을 ImageBase + AddressOfEntryPoint로 세팅
+* SectionAlignment, FileAlignment : 파일에서 섹션의 최소 정렬 단위를 나타내는 것이 FileAlignment, 메모리에서 섹션의 최소 정렬 단위를 나타내는 것이 SectionAlignment
+* SizeOfImage : PE 파일이 메모리에 로드되었을 때 가상 메모리에서 PE Image(IMAGE란 PE 구조를 만든 MS에서 만들어 낸 용어로, 보통은 PE 파일이 메모리에 로드된 상태에서 PE 메모리 영역 전체를 지칭)가 차지하는 크기(모든 섹션의 보정된(SectionAlignment 크기로 정렬된) VirtualSize 값 + PE Header 크기)
+* SizeOfHeader : PE Header의 전체 크기로, 파일 시작 위치에서 SizeOfHeader offset만큼 떨어진 위치에 첫 번째 섹션이 위치
+* Subsystem : Driver File / GUI File / CUI File
+* NumberOfRvaAndSizes : 마지막 멤버인 DataDirectory 배열의 크기로서, 구조체 정의에 IMAGE_NUMBEROF_DIRECTORY_ENTRIES(16)이라고 명시되어 있지만, PE Loader는 NumberOfRvaAndSizes 값을 보고 배열의 크기를 인식
+* DataDirectory : IMAGE_DATA_DIRECTORY 구조체의 배열로서, 배열의 각 항목마다 정의된 값을 가짐. EXPORT, IMPORT, RESOURCE, TLS Directory 등이 포함됨
+
+#### <ins>Section Header</ins>
+각 Section의 속성을 정의. 각 섹션별 IMAGE_SECTION_HEADER 구조체의 배열로 이루어져 있음
+* VirtualSize : 메모리에서 섹션이 차지하는 크기
+* VirtualAddress : 메모리에서 섹션의 시작 주소(RVA)
+* SizeOfRawData : 파일에서 섹션이 차지하는 크기
+* PointerToRawData : 파일에서 섹션의 시작 위치
+* Characteristics : 섹션의 특징(bit OR)
+* Name : 어떠한 명시적 규칙도 없는 참고용 정보

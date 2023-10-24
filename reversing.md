@@ -632,7 +632,8 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
         }
     }
     return CallNextHookEx(g_hHook, nCode, wParam, lParam);
-}// C++의 경우 오버로딩 등의 이유로, 같은 이름의 함수가 다른 함수일 수 있음
+}
+// C++의 경우 오버로딩 등의 이유로, 같은 이름의 함수가 다른 함수일 수 있음
 #ifdef __cplusplus
 extern “C“{
 #endif

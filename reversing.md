@@ -461,5 +461,47 @@ IMAGE_IMPORT_DESCRIPTOR의 Name 멤버의 RVA 값은 Header 영역에 속하며,
 <br/><br/>
 
 ## 예제 #6: UPack 디버깅(OEP 찾기)
+* UPack이 NumberOfRvaAndSizes 값을 변경하기 때문에 OllyDbg의 초기 검증 과정에서 에러가 발생하는데, 이 때문에 EP로 가지 못하고 ntdll.dll 영역에서 멈춤
+  * 강제로 EP를 설정해주어야 함(New Origin here)
+* 디코딩 루프 : 첫 번째 섹션 내의 주소를 가리키는 EDI 값에 대해 MOVS, STOS 명령어를 실행하여 압축을 해제한 메모리를 작성. CMP, JB 명령어를 사용해 반복
+* IAT 세팅 : UPack이 Import하는 두 개의 함수, LoadLibrary와 GetProcAddress를 이용하여 루프를 돌면서, 원본 notepad의 IAT를 구성(notepad에서 import하는 실제 함수)
+* 위의 과정이 끝나면 RETN 명령어를 따라 OEP로 이동
 
+<br/><br/>
+## 인라인 패치
+인라인 코드 패치는 원하는 코드를 직접 수정하기 어려울 때, 간단히 ‘코드 케이브(Code Cave)’ 패치 코드를 삽입하여 실행함으로써 프로그램을 패치하는 기법
 
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/6e9abfe1-4f64-4d45-81cb-1479903e92f3" width="700">
+</p><br/>
+
+* 패치하고자 하는 코드가 암호화된 OEP 영역에 존재한다면, 위치를 알고 있다 하더라도 부호화 문제로 인해 단순한 방법으로는 패치할 수 없음
+  * 파일 내에 코드 케이브를 설치한 후, 복호화 과정 이후에 JMP 명령어를 수정하여 코드 케이브로 이동. 즉, 실행될 때마다 프로세스 메모리의 코드를 패치
+ 
+<br/><br/>
+
+## 예제 #7: Patchme 인라인 패치 실습
+* 복호화 루프 : XOR BYTE PTR DS:[EBX], 44 명령으로 특정 영역 XOR 복호화
+* Checksum 계산 루프 : EDX를 0으로 초기화한 후, 특정 주소영역에서 4byte 단위 순차적으로 값을 읽어 들여 EDX 레지스터에 누적. Checksum 값은 레지스터의 overflow를 무시하며, 최종적으로 EDX에 남은 값을 사용. 이후의 CMP, JE 명령에서 Checksum 값과 31EB8DB0을 비교한 후, 값이 같다면(코드가 변조되지 않았다면) OEP로 이동
+* Anti-disassembly 테크닉을 사용하는 파일들에 대해 OllyDbg는 종종 코드를 데이터로 인식하는 실수를 일으킴. 이 경우 ‘Analyse code’(Ctrl + A) 기능을 사용하면 디스어셈블 가능
+* 패치하려는 문자열이 이중으로 암호화되어 있고, 프로그램 내에서 문자열 영역에 대해 Checksum 검증을 수행하기에, 인라인 패치 방법을 사용해야 함
+
+<br/>
+
+<p align="center">
+ <img src="https://github.com/mollose/Security/assets/57161613/841094b1-7f07-478b-b8b5-99e5733868eb" width="700">
+</p><br/>
+
+```
+[EP Code]
+  [Decoding Code]
+    XOR [B] with 44         
+    XOR [A] with 7
+    XOR [B] with 11
+    [A]
+      Checksum [B]
+      XOR [C] with 17
+      JMP OEP
+```

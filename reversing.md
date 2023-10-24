@@ -289,3 +289,47 @@ IMAGE_OPTIONAL_HEADER32 구조체를 가짐
 * PointerToRawData : 파일에서 섹션의 시작 위치
 * Characteristics : 섹션의 특징(bit OR)
 * Name : 어떠한 명시적 규칙도 없는 참고용 정보
+
+<br/>
+
+### RVA to RAW 
+PE 파일이 메모리에 로드되었을 때 각 섹션에서 메모리의 주소(RVA)와 파일 offset을 잘 매핑할 수 있어야 함. 이러한 매핑을 일반적으로 RVA to RAW라고 함. RAW – 섹션의 PointerToRawData = RVA – 섹션의 VirtualAddress. 따라서 RAW = RVA – 섹션의 VirtualAddress + 섹션의 PointerToRawData
+* RAW = ABA8h(RVA) - 9000h(VA) + 7C00h(PointerToRawData) = 97A8h로, 파일 offset에 있어서 세 번째 섹션에 위치할 때(RVA는 두 번째 섹션에 위치), 해당 RVA에 대한 RAW 값은 정의할 수 없음. 두 번째 섹션의 VirtualSize 값이 SizeOfRawData 값보다 크기 때문에 발생
+
+<br/>
+
+### DLL(Dynamic Linked Library) 
+동적 연결 라이브러리. 라이브러리의 바이너리 코드를 그대로 가져와 프로그램에 삽입시키던 DOS 방식과는 달리, 라이브러리를 별도의 파일로 구성하여 필요할 때마다 불러와 사용. 한 번 로드된 DLL의 코드, 리소스는 Memory Mapping 기술로 여러 프로세스에서 공유해 사용할 수 있도록 함
+* Explicit Linking : 프로그램에서 사용하는 순간에 로딩, 사용 후 메모리에서 해제
+* Implicit Linking : 프로그램이 시작할 때 같이 로딩, 프로그램 종료 시 메모리에서 해제
+  * IAT는 Implicit Linking에 대한 메커니즘 제공
+ 
+<br/>
+
+### IAT(Import Address Table)
+프로그램이 어떤 라이브러리에서 어떤 함수를 사용하고 있는지를 기술한 테이블. API 호출 시 함수를 해당 직접 호출하지 않고, IAT 메모리 영역에 접근하여 그 주소값을 가져옴(ex. CALL DWORD PTR DS:[1001104]. 다양한 환경에서 구동되기 때문, DLL Relocation 등의 요인)
+
+#### <ins>IMAGE_IMPORT_DESCRIPTOR</ins>
+PE 파일은 자신이 어떤 라이브러리를 Import하고 있는지 IMAGE_IMPORT_DESCRIPTOR 구조체에 명시. 참조하는 Library의 개수만큼의 크기의 구조체 배열 형식으로 존재하며, 배열의 마지막은 NULL 구조체로 끝남
+* OriginalFirstThunk : INT(ImportNameTable)의 주소(RVA)
+* Name : Library 이름 문자열의 주소(RVA)
+* FirstThunk : IAT(Import Address Table)의 주소(RVA)
+* INT와 IAT는 longtype 배열이고 NULL로 끝남
+* INT에서 각 원소의 값은 IMAGE_IMPORT_BY_NAME 구조체의 주소값(RVA)
+* INT와 IAT의 크기는 같아야 함
+* IID는 PE Body에 위치하며, PE Header의 IMAGE_OPTIONAL_HEADER32.DataDirectory[1].VirtualAddress에 구조체 배열의 시작 주소가 명시되어 있음
+#### <ins>PE Loader가 Import 함수 주소를 IAT에 입력하는 순서</ins>
+1) IID Name 멤버를 읽어 라이브러리의 이름 문자열을 얻음
+2) 해당 라이브러리를 로딩(LoadLibrary() 사용)
+3) IID의 OriginalFirstThunk 멤버를 읽어 INT 주소를 얻음
+4) INT에서 배열의 값을 하나씩 읽어 해당 IMAGE_IMPORT_BY_NAME 주소(RVA)를 얻음
+5) IMAGE_IMPORT_BY_NAME의 Hint(ordinal) 또는 Name 항목을 이용하여(GetProcAddress() 사용) 해당 함수의 시작 주소를 얻음
+6) IID의 FirstThunk 멤버를 읽어 IAT 주소를 얻음
+7) 해당 IAT 배열 내에서 해당하는 위치에, 위에서 구한 함수 주소를 저장
+8) INT가 끝날 때까지 (4) ~ (7)의 과정 반복
+* 일반적인 DLL은 IAT에 실제 주소가 하드코딩 되어있지 않고, INT와 동일한 값을 가지는 경우가 많음
+* 일반적인 DLL 파일은 ImageBase가 10000000h로 되어있어 DLL relocation이 발생하지만, Windows 시스템 DLL 파일(kernel32, user32, gdi32 등)은 고유의 ImageBase가 있어서 DLL relocation이 발생하지 않음
+
+<br/>
+
+

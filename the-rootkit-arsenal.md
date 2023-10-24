@@ -38,8 +38,7 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 * Exception : 프로세서가 명령어 실행 도중 faults, traps, aborts 등의 에러를 감지했을 때 발생
   * fault : fault 발생 시, 프로세서는 예외를 발생시킨 명령어 앞의 명령어 경계에서 예외를 보고. 따라서 프로그램의 상태는 예외 이전의 상태로 리셋될 수 있고 명령어 재실행 가능. divided by zero(0) 등이 fault에 해당
   * trap : 명령어 재실행 불가. 프로세서는 예외를 발생시킨 명령어 뒤의 경계에서 예외를 보고. breakpoint(3), overflow(4) 등이 fault에 해당
-  * abort : abort 발생 시 프로그램은 실행을 재개할 수 없으며 그대로 중단
-    
+  * abort : abort 발생 시 프로그램은 실행을 재개할 수 없으며 그대로 중단    
 
 #### 세그먼테이션과 프로그램 제어 
 Real mode는 세그먼테이션을 사용하므로 프로그램 제어에 있어 같은 세그먼트 내에서 점프하는지(intrasegment), 한 세그먼트에서 다른 세그먼트로 이동하는지(intersegment)가 명시되어야 함. 점프 명령어들은 near와 far로 분류될 수 있는데 near 점프는 주어진 세그먼트 내에서, far 점프는 세그먼트 간 이동 시 발생(INT / IRET은 far 점프)
@@ -47,5 +46,6 @@ Real mode는 세그먼테이션을 사용하므로 프로그램 제어에 있어
 * near jump : short jump와 유사하나 signed word(little endian) 변위를 지님
 * far jump : Far direct jump의 경우 segment selector와 effective address 모두를 명시하는 32비트 operand를 지님(short, near 점프와 달리 목적지의 주소를 명시적으로 지정)
 
+다음과 같은 공격 기법들이 존재함
 * Call table hooking : 프로그램의 제어를 얻기 위해 주소 테이블을 변경하는 것
 * Direct Kernel Object Manipulation(DKOM) : 시스템 데이터 구조체 변경

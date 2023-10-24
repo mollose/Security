@@ -980,3 +980,84 @@ int _tmain(int argc, TCHAR* argv[])
 ## PE 패치를 이용한 DLL 로딩
 실행 파일을 직접 수정하여 DLL을 강제로 로딩
 * urlmon.dll에서 제공하는 URLDownloadToFile() API 함수는 wininet.dll의 InternetOpen(), InternetOpenUrl(), InternetReadFile() API 함수만으로도 구현 가능
+
+<br/>
+
+### 예시 #9: DropFile()
+다운받은 index.html 파일을 TextView_Patch.exe 프로세스에 드롭
+
+```cpp
+BOOL CALLBACK EnumWindowProc(HWND hWnd, LPARAM lParam)
+{
+    DWORD dwPID = 0;
+    GetWindowThreadProcessId(hWnd, &dwPID);
+    if(dwPID == (DWORD)lParam)
+    {
+        g_hWnd = hWnd;
+        return FALSE; // EnumWindows 함수 중단
+    }
+    return TRUE;
+}
+HWND GetWindowHandleFromPID(DWORD dwPID)
+{
+    // 화면 상의 모든 윈도우를 거쳐 각 윈도우를 대상으로 콜백 함수 호출.
+    // 화면 상의 모든 윈도우를 거쳤거나, 콜백 함수가 FALSE를 반환했을 때 중단
+    EnumWindows(EnumWindowsProc, dwPID);
+    return g_hWnd;}BOOL DropFile(LPCTSTR wcsFile){
+    HWND hWnd = NULL;
+    DWORD dwBufSize = 0;
+    BYTE* pBuf = NULL;
+    DROPFILES* pDrop = NULL;
+    char szFile[MAX_PATH] = {0, };
+    HANDLE hMem = 0;
+    WideCharToMultiByte(CP_ACP, 0, wcsFile, -1, szFile, MAX_PATH, NULL, NULL);
+    dwBufSize = sizeof(DROPFILES) + strlen(szFile) + 1;
+    if(!(hMem = GlobalAlloc(GMEM_ZEROINIT, dwBufSize)))
+    {
+        OutputDebufString(L“GlobalAlloc() failed!!!“);
+        return FALSE;
+    }
+    pBuf = (LPBYTE)GlobalLock(hMem);
+    pDrop = (DROPFILES*)pBuf;
+    pDrop->pFiles = sizeof(DROPFILES);
+    strcpy_s((char*)(pBuf + sizeof(DROPFILES)), strlen(szFile) + 1, szFile);
+    GlobalUnlock(hMem);
+    if(!(hWnd = GetWindowHandleFromPID(GetCurrentProcessId())))
+    {
+        OutputDebufString(L“GetWndHandleFromPID() failed!!!“);
+        return FALSE;
+    }
+    PostMessage(hWnd, WM_DROPFILES, (WPARAM)pBuf, NULL);
+    return TRUE;
+}
+```
+
+* WM_DROPFILES 메시지와 함께 전달되는 드롭 파일 정보는 DROPFILES 구조체와 드롭 파일 목록으로 이루어짐. 이때, DROPFILES의 pFile 멤버는 현 구조체의 주소값으로부터 드롭 파일 목록까지의 offset을 나타냄
+* GlobalAlloc() : 16bit Windows 환경에서는 힙 메모리가 Global Heap과 Local Heap으로 나뉘어져 있었지만, 32bit Windows에선 그렇지 않으므로, 자신의 프로세스 영역의 힙에 그냥 할당하며 다른 프로세스와 힙 메모리 공유(‘Global’) 불가. 그러나 클립보드에서 사용하는 API 함수들이 GlobalAlloc이나 LocalAlloc 함수를 이용해서 할당한 메모리 주소를 요구하는 경우가 있으므로, 아직도 사용되고 있음
+* GlobalLock() : GMEM_MOVEABLE 설정 시 시작 주소가 변경될 수 있는 메모리를 사용하므로, GlobalAlloc()은 주소값이 아닌 핸들값을 반환. 이때 GlobalLock 함수는 이러한 핸들값을 포인터로 변환시켜줌
+
+<br/>
+
+* myhack.dll의 익스포트 함수 dummy() : 아무런 기능이 없으나 익스포트하는 이유는, myhack3.dll을 TextView.exe의 임포트 테이블에 추가하도록 하는 형식적인 완전성을 제공하기 위한 것(최소한 하나 이상의 익스포트 함수)
+
+<br/>
+
+### 패치 사전조사
+TextView.exe의 IDT 주소를 확인했을 때, IDT 끝 부분에 다른 데이터가 존재하기 때문에, myhack3.dll을 위한 IID 구조체를 덧붙일 공간이 없음을 알 수 있음
+
+<br/>
+
+### IDT 이동
+IDT 전체를 다른 넓은 위치로 옮긴 후 새로운 IID를 추가해야 함. .rdata 섹션의 파일 크기는 2E00이지만 메모리상에서의 크기가 2C56이므로, 실제 프로그램에서 매핑되는 데이터의 크기는 2C56 뿐임. 나머지 사용하지 않는 1AA 크기의 영역에 IDT를 재구성하는 것은 문제되지 않음
+* IMPORT Table의 RVA 값 변경 : IMAGE_OPTIONAL_HEADER의 IMPORT Table 구조체 멤버에서, RVA 값을 새로운 IDT의 RVA 값으로, Size 값은 기존의 64에 14를 더한 값인 78로 변경
+* BOUND IMPORT TABLE 제거 : myhack3.dll을 정상적으로 임포트하기 위해선 BOUND IMPORT TABLE에도 정보를 추가해야 하지만, 다행히 이 테이블은 옵션으로서 반드시 존재할 필요가 없기 때문에 작업의 편의를 위해 제거(0으로 변경)
+* 새로운 IDT 생성 : 기존 IDT를 전부 복사하여 새로운 위치에 덮어쓰기. myhack3.dll을 위한 IID를 구성하여 새로 생성된 IDT의 끝에 추가
+* Name, INT, IAT 세팅 : 작업 편의에 따라 빈 공간 선택. IAT 값은 INT와 같은 값을 가져도, 다른 값을 가져도 좋음
+* IAT 섹션의 Characteristics 변경 : IAT는 PE 로더에 의해 메모리에 로드될 때, 실제 함수 주소로 덮어써지기 때문에 해당 섹션은 반드시 WRITE 속성을 가지고 있어야 함(IMAGE_SCN_MEM_WRITE(80000000))
+  * Data Directory 배열 중 ‘IMPORT Address Table’에 명시된 주소영역 내에 IAT가 존재한다면, 그 섹션에는 쓰기 속성이 없어도 됨
+ 
+<br/><br/>
+
+## Code 인젝션
+상대방 프로세스에 독립 실행 코드를 삽입한 후 실행하는 기법
+

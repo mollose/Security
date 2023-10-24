@@ -190,3 +190,5 @@ Windows Vista와 Windows Server 2008 이후 커널은 변화하는 요구의 수
 
 ##### 주소 윈도잉 확장(AWE) 
 AWE는 32비트 유저 애플리케이션이 64GB까지의 물리 메모리에 접근하는 것을 허용. 이 기능은 winbase.h에 선언된 API를 기반으로 하고 있으며 이는 이 API를 사용한 프로그램이 선형 주소 공간에 의해 주어진 제한보다 큰 크기의 물리 메모리 범위에 접근하는 것을 허용하는 방식. AWE API 루틴으로는 VirtualAlloc(), VirtualAllocEx(), AllocateUserPhysicalPages(), MapUserPhysicalPages(), MapUserPhysicalPagesScatter(), FreeUserPhysicalPages()가 있음. AWE는 애플리케이션의 선형 주소 공간 내에 고정 크기 영역(window)들을 할당하고 물리 메모리 내의 더욱 큰 고정 크기 window들에 매핑한다는 점에서 주소 윈도잉 확장으로 불림. AWE를 통해 할당된 메모리는 페이징되지 않음(non-paged). AWE는 엄밀히 Microsoft의 기술이지만(또한 PAE 없이도 사용될 수 있음), 만약 애플리케이션이 4GB 경계 이상의 물리 메모리에 접근하는데 AWE API를 사용한다면 PAE의 활성화는 필요할 것. 또한 AWE 루틴을 호출하는 애플리케이션을 실행하는 유저는 ‘Lock Pages in Memory’ 특권 필요
+
+* 4GT는 선형 주소 공간을 재분할해 유저 애플리케이션이 더욱 큰 영역을 가질 수 있게 하나, 만약 애플리케이션이 3GB보다 큰 영역을 요구할 경우 AWE를 사용할 수 있음. AWE를 사용하는 애플리케이션에서 4GB 이상의 물리 메모리를 요구하면 PAE의 활성화가 필요할 수 있음

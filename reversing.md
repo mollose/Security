@@ -160,4 +160,42 @@ SUB ESP, 8
 * XOR EAX, EAX : main() 함수 리턴값(0) 세팅. 같은 값끼리 XOR 시 0이 되는 특성을 이용
 * main 함수 시작 이전과 종료 이후에는, 컴파일러에서 추가한 Stub Code 실행
 
+<br/><br/>
 
+## 예제 #2: abex’ crackme #2
+
+<br/>
+
+### Visual Basic
+* VB 전용 엔진 : VB 파일은 MSVBVM60.dll이라는 전용 엔진을 사용(The Thunder Runtime Engine)
+ * 메시지 박스 출력 시 MSVBVM60.dll!rtcMsgBox() 함수를 사용하며, 이 함수 내부에서 Win32 API인 user32.dll!MessageBoxW() 함수를 호출
+* N(Native) code, P(Pseude) code : VB는 컴파일 옵션에 따라 IA-32 Instruction(일반적인 디버거에서 해석 가능)을 사용하는 N code와 VB 엔진으로 가상 머신을 구현하여 바이트코드를 사용하는 인터프리터 언어 개념의 P code로 컴파일이 가능(P code의 정확한 해석을 위해선 VB 엔진을 분석하여 에뮬레이터를 구현하여야 함)
+* Event Handler : VB는 주로 GUI 프로그래밍에 사용되며, Event Driven 방식으로 동작. 따라서 WinMain() 혹은 main()이 아니라 각 event handler에 사용자 코드가 위치
+* undocumented 구조체 : VB에서 사용되는 각종 정보들은 내부적으로 구조체 형식으로 저장됨
+* 간접 호출 : VB 엔진의 메인 함수인 ThunRTMain() 함수 호출 시 CALL 명령에 의해서 JMP DWORD PTR DS:[4010A0]이 실행되는데, 이것이 VC++, VB 컴파일러에서 자주 사용되는 간접 호출(Indirect Call) 기법
+* RT_MainStruct 구조체 : ThunRTMain() 함수의 파라미터로 사용됨. 구조체의 멤버는 또 다른 구조체의 주소들이며, VB 엔진은 이들로부터 실행에 필요한 정보를 얻음
+* VB의 문자열은 C++의 string 클래스와 마찬가지로 가변 길이 문자열 타입. 문자열 객체는 16byte 크기 데이터로, 내부에 동적으로 할당한 실제 문자열 버퍼 주소를 가지고 있음
+* VB에서 함수(event handler)와 함수 사이는 NOP 명령어들로 채워져 있음
+* ThunRTMain() 함수는 프로그램 코드가 아니라, VB 엔진 내부에 위치
+* 프로그램 시작 시에는 DLL 파일들을 로드하지 않다가, 필요한 부분에서(해당 함수를 호출했을 경우) DLL 파일들을 로드하여 요청을 처리(메모리 절약의 효과)
+ * DLL을 호출했다가 다시 메인 프로그램으로 흐름이 돌아오고 다시 DLL을 호출하는 식의 이러한 방식에는, OllyDbg 같은 일반적인 디버거로 분석하기에 어려운 면이 있음. 따라서 SmartCheck, VB Decompiler 등의 프로그램으로 VB 프로그램의 흐름을 파악할 필요가 있음
+* __vbaVarTstEq() : 등록(Registration) 여부를 검증하는 것과 관련된 부분에서 자주 사용
+
+<br/>
+
+### Serial 생성 알고리즘
+Name 문자열을 읽은 후, 루프를 돌면서 문자를 암호화(XOR, ADD, SUB 등의 연산 이용)
+* __vbaVarForInit(), __vbaVarForNext() : 문자열 객체에서 한 글자씩 참조할 수 있도록 해줌(≒ 연결 리스트의 next 포인터)
+* __vbaStrVarVal() : 문자열에서 하나의 문자(UNICODE)를 가져옴
+* rtcAnsiValueBstr() : 유니코드 – ASCII 변환에 사용
+* __vbaVarAdd() : 두 값을 받아 더한 후, 결과값을 지정된 버퍼에 저장
+* rtcHexVarFromVar() : ASCII 값을 유니코드 문자열로 변경
+* __vbaVarCat() : 문자열 이어붙이기
+
+<br/>
+
+* MOV EAX, DWORD PTR SS:[EBP – 88] 명령에 의해 EAX 레지스터에 문자열 주소가 세팅될 때, [EBP – 88] 변수가 스트링 객체라는 것을 유추 가능
+
+<br/><br/>
+
+<br/><br/>

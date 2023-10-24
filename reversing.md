@@ -238,5 +238,12 @@ OBJ 파일 제외, 모두 실행 가능한 파일 형식
  <img src="https://github.com/mollose/Security/assets/57161613/28bb5c01-45c0-4578-bb72-72592bd707f4" width="700">
 </p><br/>
 
+* offset : HxD 등의 프로그램으로 PE 파일을 열었을 때의 오프셋
+* VA : 프로그램 가상 메모리 절대 주소(OllyDbg 등으로 PE 파일을 실행했을 때의 주소)
+* RVA : 어느 기준위치에서의 상대 주소(VA = ImageBase + RVA)
+* PE Header의 끝 부분과 각 Section의 끝에는 최소 기본 단위에 맞추어 널 패딩이 붙음
 
+<br/>
 
+### DOS Header
+DOS 파일에 대한 하위 호환성을 고려, PE Header의 제일 앞부분에는 기존 DOS EXE Header를 확장시킨 IMAGE_DOS_HEADER 구조체가 존재(40h 크기)

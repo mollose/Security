@@ -34,4 +34,8 @@ IA-32 프로세서의 mode of operation은 그것이 지원할 기능을 결정.
 
 3가지 타입의 인터럽트가 존재
 * Hardware interrupt : 외부 디바이스에 의해 예상치 못하게 발생. CLI 명령어로 IF를 클리어함으로써 해제 가능한 maskable interrupt와 해제 불가능한 nonmaskable interrupt로 나뉨
-* Software interrupt : INT 명령어를 사용하는 프로그램에 의해 구현됨. INT 명령어는 interrupt vector를 지정하는 하나의 operand를 가짐. INT 명령어 실행 시 TF와 IF를 클리어함. FLAGS, CS, IP 레지스터를 순서대로 스택에 저장한 뒤, 인터럽트 벡터를 통해 ISR의 주소로 이동. IRET 명령어를 만날 때까지 ISR의 코드를 실행. *IRET은 스택에 저장된 값들을 다시 꺼낸 후* INT 명령 이후의 명령어들에 대해 실행 재개
+* Software interrupt : INT 명령어를 사용하는 프로그램에 의해 구현됨. INT 명령어는 interrupt vector를 지정하는 하나의 operand를 가짐. INT 명령어 실행 시 TF와 IF를 클리어함. FLAGS, CS, IP 레지스터를 순서대로 스택에 저장한 뒤, 인터럽트 벡터를 통해 ISR의 주소로 이동. IRET 명령어를 만날 때까지 ISR의 코드를 실행. **IRET은 스택에 저장된 값들을 다시 꺼낸 후** INT 명령 이후의 명령어들에 대해 실행 재개
+* Exception : 프로세서가 명령어 실행 도중 faults, traps, aborts 등의 에러를 감지했을 때 발생
+  * fault : fault 발생 시, 프로세서는 예외를 발생시킨 명령어 앞의 명령어 경계에서 예외를 보고. 따라서 프로그램의 상태는 예외 이전의 상태로 리셋될 수 있고 명령어 재실행 가능. divided by zero(0) 등이 fault에 해당
+  * trap : 명령어 재실행 불가. 프로세서는 예외를 발생시킨 명령어 뒤의 경계에서 예외를 보고. breakpoint(3), overflow(4) 등이 fault에 해당
+  * abort : abort 발생 시 프로그램은 실행을 재개할 수 없으며 그대로 중단

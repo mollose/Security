@@ -385,7 +385,7 @@ PE 파일은 자신이 어떤 라이브러리를 Import하고 있는지 IMAGE_IM
 * CALL / JMP 복원 루프 : 원본 코드의 CALL / JMP 명령어(opcode E8 / E9)의 destination 주소를 복원하는 코드(EDI 위치를 대상으로 바이트별 비교를 통해 E8 / E9 명령어를 찾음)
 * IAT 세팅 루프 : 디코딩을 거친 이후의 두 번째 섹션(UPX1) 영역에는 notepad.exe에서 사용하는 API 이름 문자열이 저장되어 있음. 이 API 문자열을 이용해 GetProcAddress() 함수를 호출하여 시작 주소를 얻은 후, EBX가 가리키는 원본 notepad.exe의 IAT 영역에 API 주소를 입력
 
-* 최종적으로 JMP 명령어에 의해 OEP(Original Entry Point)로 이동
+최종적으로 JMP 명령어에 의해 OEP(Original Entry Point)로 이동
 * UPX 패커의 특징 중 하나는 EP 코드가 PUSHAD, POPAD로 둘러싸여 있다는 것으로, OEP로 가는 JMP 명령어가 POPAD 명령어 직후에 나타난다
   * PUSHAD에서 사용한 스택 주소를 따라가 하드웨어 브레이크 포인트를 설치함으로써, 동일한 주소에 접근하는 POPAD 명령어를 찾을 수 있음
 
